@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
 def generate_output_index():
     """
     Creates output index for all possible Tablut moves. Returns them as a dictionary where key is string tuple "(from_sq, to_sq)" and value is unique index number:
@@ -7,9 +10,6 @@ def generate_output_index():
 
     LEN_ROW = 9
     NUM_SQUARES = LEN_ROW**2
-    CASTLE_SQUARE = int((NUM_SQUARES-1)/2)
-    CENTRE_COL = [(LEN_ROW*x)+(LEN_ROW//2) for x in range(0,9)]
-    CENTRE_ROW = [x for x in range(int(CASTLE_SQUARE-(LEN_ROW//2)), int(CASTLE_SQUARE+(LEN_ROW//2)+1))]
 
     index_value = 0
 
@@ -70,6 +70,7 @@ class Board():
                     self.EMPTY, self.EMPTY, self.EMPTY, self.EMPTY, self.BLACK, self.EMPTY, self.EMPTY, self.EMPTY, self.EMPTY,
                     self.EMPTY, self.EMPTY, self.EMPTY, self.BLACK, self.BLACK, self.BLACK, self.EMPTY, self.EMPTY, self.EMPTY]
 
+## TODO: fix this so that 'edge captures' aren't possible!!
     def find_captures(self, move):
         """
         Checks for any captures resulting from inputted move. Returns list of captured piece square indexes.
@@ -85,8 +86,12 @@ class Board():
             """
             enemy_index = to_square + step
             ally_index = to_square + (2 * step)
+            # to avoid edge captures wrapping around the board
+            if (step in [-1, 1]) and (ally_index // 9 != to_square // 9):
+                return
             if 0 <= ally_index <= 80:
-                if self.board[ally_index] in ally:
+                # if square two over is an ally, or if it is an unoccupied castle square, check middle square.
+                if self.board[ally_index] in ally or (ally_index == self.CASTLE and self.board[ally_index] != self.KING):
                     if self.board[enemy_index] == enemy:
                         captures.append(enemy_index)
                     if self.turn == self.BLACK and enemy_index not in [31, 39, 40, 41, 49] and \
@@ -106,7 +111,7 @@ class Board():
                         for direction in [-9, -1, 1, 9]:
                             if 0 <= king_index + direction <= 80:
                                 if self.board[king_index + direction] == self.WHITE or \
-                                (self.board[king_index + direction] == self.EMPTY and king_index + direction != 40):
+                                (self.board[king_index + direction] == self.EMPTY and king_index + direction != self.CASTLE):
                                     return
                         captures.append(king_index)
 
@@ -199,27 +204,56 @@ class Board():
                 self.legal_moves = moves
         return self.legal_moves
 
+    def is_surround(self):
+        """
+        Determines if white pieces are surrounded to meet conditions for Black win. Returns True if surrounded, False otherwise.
+        """
+        searched_squares = set()
+
+        def flood_fill(head):
+            """
+            Recursive DFS flood fill function to determine if the white pieces are surrounded. True if flood fill finds a white piece / king, else false
+            """
+            for increment in [9, -1, -9, 1]:
+                tail = head + increment
+                if 0 <= tail <= 80:
+                    if tail not in searched_squares:
+                        searched_squares.add(tail)
+                        if self.board[tail] == self.WHITE or self.board[tail] == self.KING:
+                            return True
+                        elif self.board[tail] == self.EMPTY:
+                            if flood_fill(tail):
+                                return True
+                        else:
+                            continue
+            return False
+
+        for edge in self.EDGES:
+            if self.board[edge] == self.WHITE or self.board[edge] == self.KING:
+                return False
+            elif edge not in searched_squares and self.board[edge] != self.BLACK:
+                if flood_fill(edge):
+                    return False
+        return True
+
+    # TODO: fix the surrounding logic!! How tf do I do this
     def is_terminal(self):
         """
         Detects terminal position, returns tuple (bool, int)
         """
         winner = None
         # white wins if King reaches edge
-        for edge_square in self.EDGES:
-            if self.board[edge_square] == self.KING:
-                winner = self.WHITE
-                return True, winner
-        # black wins by capture
-        if self.KING not in self.board:
-            winner = self.BLACK
-            return True, winner
-        # black wins by surrounding
+        if self.turn == self.BLACK: # terminal check occurs at beginning of each player's turn
+            for edge_square in self.EDGES:
+                if self.board[edge_square] == self.KING:
+                    winner = self.WHITE
+                    return True, winner
+        # black wins by capture or surrounding
         if self.turn == self.WHITE:
-            for move in self.generate_moves():
-                if move[1] in self.EDGES:
-                    return False, None
-            winner = self.BLACK
-            return True, winner
+            if self.KING not in self.board or self.is_surround():
+                winner = self.BLACK
+                return True, winner
+
         # stalemate by repetition
         if len(self.move_log) == 6:
             if self.move_log[0] == self.move_log[4] and self.move_log[1] == self.move_log[5]:
@@ -227,10 +261,16 @@ class Board():
         return False, None
 
     def get_network_output_index(self, move):
+        """
+        For given move, returns network output index value.
+        """
         return self.OUTPUT_INDEX[str(move)]
 
     ## TODO: can experiment with different types of input shape. Multidimensional? More/less than 9 'turn' bits?
     def to_network_input(self):
+        """
+        Converts board to a 1D encoding of the position. Returns bitvector summarising position.
+        """
         position_vector = []
         for i in range(0, 81):
             if self.board[i] == Board.WHITE:
@@ -253,3 +293,73 @@ class Board():
             else:
                 position_vector.append(0)
         return position_vector
+
+    def to_network_input_multidim(self):
+        """
+        Converts board to a 4D encoding of position. [white, black, king, turn]
+        """
+        position_vector = []
+        def build_bitvector(feature):
+            _pos = []
+            for i in range(0, 81):
+                if self.board[i] == feature:
+                    _pos.append(1)
+                else:
+                    _pos.append(0)
+            return _pos
+        position_vector.append(build_bitvector(Board.WHITE))
+        position_vector.append(build_bitvector(Board.BLACK))
+        position_vector.append(build_bitvector(Board.KING))
+        _turn = []
+        for i in range(0, 81):
+            if self.turn == Board.WHITE:
+                _turn.append(1)
+            else:
+                _turn.append(0)
+        position_vector.append(_turn)
+        return position_vector
+
+def draw_board(board_state):
+    """
+    Draw the game board using matplotlib based on the given board state.
+    """
+    # Reshape the 1x81 list to a 9x9 list
+    board_state = np.reshape(board_state, (9, 9))
+
+    # Create a new plot
+    fig, ax = plt.subplots()
+
+    # Draw vertical lines
+    for i in range(1, 9):
+        plt.axvline(x=i, color='black', linewidth=2)
+
+    # Draw horizontal lines
+    for j in range(1, 9):
+        plt.axhline(y=j, color='black', linewidth=2)
+
+    # Draw the game board
+    for i in range(9):
+        for j in range(9):
+            # Add piece if exists in the board state
+            ax.text(i + 0.5, j + 0.5, str(i*9+j), color='grey', ha='center', va='center', fontsize=20, alpha=0.25)
+            piece = board_state[i][j]
+            if piece != 0:
+                if piece == 2:
+                    ax.text(i + 0.5, j + 0.5, 'B', color='black', ha='center', va='center', fontsize=20)
+                elif piece == 1:
+                    ax.text(i + 0.5, j + 0.5, 'W', color='red', ha='center', va='center', fontsize=20)
+                else:
+                    ax.text(i + 0.5, j + 0.5, 'K', color='orange', ha='center', va='center', fontsize=20)
+
+    # Set the aspect of the plot to equal
+    ax.set_aspect('equal')
+
+    # Set the limits of the plot
+    ax.set_xlim(0, 9)
+    ax.set_ylim(0, 9)
+
+    # Remove the axis
+    ax.axis('off')
+
+    # Show the plot
+    plt.show()

@@ -124,10 +124,30 @@ class Board():
 
         return captures
 
+    def is_winning_move(self):
+        """
+        Checks to see if white has a winning move. Returns (first) winning move if available.
+        """
+        king_ix = None
+        for i, piece in enumerate(self.board):
+            if piece == self.KING:
+                king_ix = i
+        for candidate_move in self.legal_moves:
+            if candidate_move[0] == king_ix and candidate_move[1] in self.EDGES:
+                return candidate_move
+        return None
 
     def apply_move(self, move):
         """
         Applies a move to the board. Takes a move as input and resets legal move 'cache'.
+        """
+        """
+        ### Following snippet is for simulation with supervised network, where king wins were not recognised.
+        if self.turn == self.WHITE:
+            winning_move = self.is_winning_move()
+            if winning_move:
+                move = winning_move
+        ###
         """
         # update move log for 4 most recent moves
         if len(self.move_log) < 6:
@@ -253,7 +273,6 @@ class Board():
             if self.KING not in self.board or self.is_surround():
                 winner = self.BLACK
                 return True, winner
-
         # stalemate by repetition
         if len(self.move_log) == 6:
             if self.move_log[0] == self.move_log[4] and self.move_log[1] == self.move_log[5]:

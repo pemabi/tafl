@@ -146,13 +146,14 @@ class MCTS():
         self.root_node = root_node
         _ = self.root_node.expand(self.network)
         for i in range(0, 100):
+            # selects most promising root node based on examining its potential moves using model
             selected_node = self.select(root_node)
             self.expand_and_evaluate(selected_node)
-            N_sum = 0
-            move_probs = []
-            for edge, _ in root_node.child_edge_node:
-                N_sum += edge.N
-            for (edge, node) in root_node.child_edge_node:
-                prob = (edge.N ** (1 / self.tau)) / ((N_sum) ** (1/self.tau))
-                move_probs.append((edge.move, prob, edge.N, edge.Q))
-            return move_probs
+        N_sum = 0
+        move_probs = []
+        for edge, _ in root_node.child_edge_node:
+            N_sum += edge.N
+        for (edge, node) in root_node.child_edge_node:
+            prob = (edge.N ** (1 / self.tau)) / ((N_sum) ** (1/self.tau))
+            move_probs.append((edge.move, prob, edge.N, edge.Q))
+        return move_probs

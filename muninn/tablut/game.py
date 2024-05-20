@@ -48,6 +48,7 @@ class Board():
              45, 53, 54, 62, 63, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80}
 
     OUTPUT_INDEX = generate_output_index()
+    LEN_OUTPUT_INDEX = len(OUTPUT_INDEX)
 
 
     def __init__(self):
@@ -155,7 +156,7 @@ class Board():
         else:
             self.move_log = self.move_log[1:]
             self.move_log.append(move)
-        # applies move by setting 'to square' index to moved piece and 'from square' top empty
+        # applies move by setting 'to square' index to moved piece and 'from square' to empty
         from_square = move[0]
         to_square = move[1]
         self.board[to_square] = self.board[from_square]

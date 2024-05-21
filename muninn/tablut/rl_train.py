@@ -63,24 +63,20 @@ model = keras.models.load_model("../saved_models/supervised_model_tablut_md.kera
 mcts_searcher = mcts.MCTS(model)
 learner = ReinfLearn(model)
 
-for i in range(0, 100):
+for i in range(0, 11):
     print(f"Training Iteration: {i}")
     all_pos = []
     all_move_probs = []
     all_values = []
-    for j in tqdm(range(0, 3)):
+    for j in tqdm(range(0, 10)):
         pos, move_probs, values = learner.play_game()
         all_pos += pos
         all_move_probs += move_probs
         all_values += values
 
-        print(pos[1])
-        print(move_probs[1])
-
     np_pos = np.array(all_pos)
     np_probs = np.array(all_move_probs)
     np_vals = np.array(all_values)
-    print(f'positions: {len(np_pos)} | probs: {len(np_probs)} | vals: {len(np_vals)}')
     model.fit(np_pos, [np_probs, np_vals], epochs = 256, batch_size=16, verbose=0)
-    if i == 10:
+    if i % 10 == 0:
         model.save(f'model_it{i}.keras')

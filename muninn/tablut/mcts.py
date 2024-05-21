@@ -145,6 +145,7 @@ class MCTS():
     def search(self, root_node):
         self.root_node = root_node
         _ = self.root_node.expand(self.network)
+        # takes about 2.5 minutes to complete 100 mcts iterations
         for i in range(0, 100):
             # selects most promising root node based on examining its potential moves using model
             selected_node = self.select(root_node)

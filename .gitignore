@@ -1,5 +1,6 @@
 data/
 muninn/saved_models/
-muninn/tablut/misc
+muninn/tablut_legacy/misc/
 *.png
 *.jpg
+*.npy

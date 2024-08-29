@@ -1,0 +1,142 @@
+cdef class TablutBoard:
+    cdef unsigned long long white_lower64, black_lower64, king_lower64, throne_lower64
+    cdef unsigned int white_upper17, black_upper17, king_upper17, throne_upper17
+
+    def __init__(self):
+        self.white_lower64 = self.black_lower64 = self.king_lower64 = self.throne_lower64 = 0
+        self.white_upper17 = self.black_upper17 = self.king_upper17 = self.throne_upper17 = 0
+        self.initialize_board()
+
+    cdef void initialize_board(self):
+        # Set up the initial Tablut board state
+        self.set_bit(4, 4, 'throne')
+        self.set_bit(4, 4, 'king')
+
+        # Set white pieces
+        for i in [2, 3, 5, 6]:
+            self.set_bit(4, i, 'white')
+            self.set_bit(i, 4, 'white')
+
+        # Set black pieces
+        black_positions = [
+            (0, 3), (0, 4), (0, 5), (1, 4),
+            (3, 0), (4, 0), (5, 0), (4, 1),
+            (8, 3), (8, 4), (8, 5), (7, 4),
+            (3, 8), (4, 8), (5, 8), (4, 7)
+        ]
+        for row, col in black_positions:
+            self.set_bit(row, col, 'black')
+
+    cdef void set_bit(self, int row, int col, str piece_type):
+        cdef int bit_position = row * 9 + col
+        cdef unsigned long long mask_lower
+        cdef unsigned int mask_upper
+
+        if bit_position < 64:
+            mask_lower = 1ULL << bit_position
+            mask_upper = 0
+        else:
+            mask_lower = 0
+            mask_upper = 1 << (bit_position - 64)
+
+        # Clear the position on all bitboards
+        self.white_lower64 &= ~mask_lower
+        self.black_lower64 &= ~mask_lower
+        self.king_lower64 &= ~mask_lower
+        self.throne_lower64 &= ~mask_lower
+        self.white_upper17 &= ~mask_upper
+        self.black_upper17 &= ~mask_upper
+        self.king_upper17 &= ~mask_upper
+        self.throne_upper17 &= ~mask_upper
+
+        # Set the piece on the appropriate bitboard
+        if piece_type == 'white':
+            self.white_lower64 |= mask_lower
+            self.white_upper17 |= mask_upper
+        elif piece_type == 'black':
+            self.black_lower64 |= mask_lower
+            self.black_upper17 |= mask_upper
+        elif piece_type == 'king':
+            self.king_lower64 |= mask_lower
+            self.king_upper17 |= mask_upper
+        elif piece_type == 'throne':
+            self.throne_lower64 |= mask_lower
+            self.throne_upper17 |= mask_upper
+
+    cdef str get_bit(self, int row, int col):
+        cdef int bit_position = row * 9 + col
+        cdef unsigned long long mask_lower
+        cdef unsigned int mask_upper
+
+        if bit_position < 64:
+            mask_lower = 1ULL << bit_position
+            if self.white_lower64 & mask_lower:
+                return 'white'
+            elif self.black_lower64 & mask_lower:
+                return 'black'
+            elif self.king_lower64 & mask_lower:
+                return 'king'
+            elif self.throne_lower64 & mask_lower:
+                return 'throne'
+        else:
+            mask_upper = 1 << (bit_position - 64)
+            if self.white_upper17 & mask_upper:
+                return 'white'
+            elif self.black_upper17 & mask_upper:
+                return 'black'
+            elif self.king_upper17 & mask_upper:
+                return 'king'
+            elif self.throne_upper17 & mask_upper:
+                return 'throne'
+
+        return 'empty'
+
+    cdef void pop_bit(self, int row, int col, str piece_type):
+        cdef int bit_position = row * 9 + col
+        cdef unsigned long long mask_lower
+        cdef unsigned int mask_upper
+
+        # create appropriate mask
+        if bit_position < 64:
+            mask_lower = 1ULL << bit_position
+            mask_upper = 0
+        else:
+            mask_lower = 0
+            mask_upper = 1 << (bit_position - 64)
+
+        # Remove the piece on the appropriate bitboard
+        if piece_type == 'white':
+            self.white_lower64 |= mask_lower
+            self.white_upper17 |= mask_upper
+        elif piece_type == 'black':
+            self.black_lower64 |= mask_lower
+            self.black_upper17 |= mask_upper
+        elif piece_type == 'king':
+            self.king_lower64 |= mask_lower
+            self.king_upper17 |= mask_upper
+        elif piece_type == 'throne':
+            self.throne_lower64 |= mask_lower
+            self.throne_upper17 |= mask_upper
+
+
+
+    def draw_board(self):
+        board_str = ""
+        for row in range(9):
+            for col in range(9):
+                piece = self.get_bit(row, col)
+                if piece == 'white':
+                    board_str += 'W '
+                elif piece == 'black':
+                    board_str += 'B '
+                elif piece == 'king':
+                    board_str += 'K '
+                elif piece == 'throne':
+                    board_str += 'T '
+                else:
+                    board_str += '. '
+            board_str += '\n'
+        return board_str
+
+    def print_board(self):
+        print(self.draw_board())

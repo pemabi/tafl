@@ -32,6 +32,18 @@ END: Cython Metadata */
     #define PyDict_GetItemWithError _PyDict_GetItemWithError
     #endif
     
+
+    #if PY_MAJOR_VERSION >= 3
+      #define __Pyx_PyFloat_FromString(obj)  PyFloat_FromString(obj)
+    #else
+      #define __Pyx_PyFloat_FromString(obj)  PyFloat_FromString(obj, NULL)
+    #endif
+    
+
+    #if (PY_VERSION_HEX < 0x030700b1 || (CYTHON_COMPILING_IN_PYPY && PYPY_VERSION_NUM < 0x07030600)) && !defined(PyContextVar_Get)
+    #define PyContextVar_Get(var, d, v)         ((d) ?             ((void)(var), Py_INCREF(d), (v)[0] = (d), 0) :             ((v)[0] = NULL, 0)         )
+    #endif
+    
 #ifndef Py_PYTHON_H
     #error Python headers needed to compile C extensions, please install development version of Python.
 #elif PY_VERSION_HEX < 0x02070000 || (0x03000000 <= PY_VERSION_HEX && PY_VERSION_HEX < 0x03030000)
@@ -1242,6 +1254,16 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include "pythread.h"
+
+    #if CYTHON_COMPILING_IN_PYPY
+    #ifdef _MSC_VER
+    #pragma message ("This module uses CPython specific internals of 'array.array', which are not available in PyPy.")
+    #else
+    #warning This module uses CPython specific internals of 'array.array', which are not available in PyPy.
+    #endif
+    #endif
+    
 #ifdef _OPENMP
 #include <omp.h>
 #endif /* _OPENMP */
@@ -1492,7 +1514,11 @@ static const char *__pyx_filename;
 static const char *__pyx_f[] = {
   "tablut.pyx",
   "<stringsource>",
+  "contextvars.pxd",
+  "array.pxd",
   "type.pxd",
+  "bool.pxd",
+  "complex.pxd",
 };
 /* #### Code section: utility_code_proto_before_types ### */
 /* ForceInitThreads.proto */
@@ -1505,12 +1531,42 @@ static const char *__pyx_f[] = {
 /* #### Code section: type_declarations ### */
 
 /*--- Type declarations ---*/
+#ifndef _ARRAYARRAY_H
+struct arrayobject;
+typedef struct arrayobject arrayobject;
+#endif
+struct __pyx_opt_args_7cpython_11contextvars_get_value;
+struct __pyx_opt_args_7cpython_11contextvars_get_value_no_default;
+
+/* "cpython/contextvars.pxd":112
+ * 
+ * 
+ * cdef inline object get_value(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the default value of the context variable,
+ */
+struct __pyx_opt_args_7cpython_11contextvars_get_value {
+  int __pyx_n;
+  PyObject *default_value;
+};
+
+/* "cpython/contextvars.pxd":129
+ * 
+ * 
+ * cdef inline object get_value_no_default(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the provided default value if no such value was found.
+ */
+struct __pyx_opt_args_7cpython_11contextvars_get_value_no_default {
+  int __pyx_n;
+  PyObject *default_value;
+};
 struct __pyx_t_6tablut_Bitboard;
 struct __pyx_t_6tablut_BlockerMoveTables;
 
-/* "tablut.pyx":21
- * # Bitboard Struct and Mask Constants
- * #------------------------------------------------------------------------------
+/* "tablut.pyx":27
+ * ZERO = <uint64_t>0
+ * 
  * cdef struct Bitboard:             # <<<<<<<<<<<<<<
  *     uint64_t low
  *     uint64_t high
@@ -1520,9 +1576,9 @@ struct __pyx_t_6tablut_Bitboard {
   uint64_t high;
 };
 
-/* "tablut.pyx":398
- * #---------------------------------------------
- * 
+/* "tablut.pyx":375
+ * # Build matching blocker subset and attack tables
+ * #-------------------------------------------------
  * cdef struct BlockerMoveTables:             # <<<<<<<<<<<<<<
  *     uint64_t* blockers
  *     Bitboard* moves
@@ -1922,6 +1978,14 @@ static CYTHON_INLINE long __Pyx_mod_long(long, long);
 /* CIntToPyUnicode.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyUnicode_From_int(int value, Py_ssize_t width, char padding_char, char format_char);
 
+/* PyIntBinop.proto */
+#if !CYTHON_COMPILING_IN_PYPY
+static PyObject* __Pyx_PyInt_LshiftObjC(PyObject *op1, PyObject *op2, long intval, int inplace, int zerodivision_check);
+#else
+#define __Pyx_PyInt_LshiftObjC(op1, op2, intval, inplace, zerodivision_check)\
+    (inplace ? PyNumber_InPlaceLshift(op1, op2) : PyNumber_Lshift(op1, op2))
+#endif
+
 /* PyDictVersioning.proto */
 #if CYTHON_USE_DICT_VERSIONS && CYTHON_USE_TYPE_SLOTS
 #define __PYX_DICT_VERSION_INIT  ((PY_UINT64_T) -1)
@@ -1969,6 +2033,57 @@ static PyObject *__Pyx__GetModuleGlobalName(PyObject *name, PY_UINT64_T *dict_ve
 static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(PyObject *name);
 #endif
 
+/* SwapException.proto */
+#if CYTHON_FAST_THREAD_STATE
+#define __Pyx_ExceptionSwap(type, value, tb)  __Pyx__ExceptionSwap(__pyx_tstate, type, value, tb)
+static CYTHON_INLINE void __Pyx__ExceptionSwap(PyThreadState *tstate, PyObject **type, PyObject **value, PyObject **tb);
+#else
+static CYTHON_INLINE void __Pyx_ExceptionSwap(PyObject **type, PyObject **value, PyObject **tb);
+#endif
+
+/* GetItemInt.proto */
+#define __Pyx_GetItemInt(o, i, type, is_signed, to_py_func, is_list, wraparound, boundscheck)\
+    (__Pyx_fits_Py_ssize_t(i, type, is_signed) ?\
+    __Pyx_GetItemInt_Fast(o, (Py_ssize_t)i, is_list, wraparound, boundscheck) :\
+    (is_list ? (PyErr_SetString(PyExc_IndexError, "list index out of range"), (PyObject*)NULL) :\
+               __Pyx_GetItemInt_Generic(o, to_py_func(i))))
+#define __Pyx_GetItemInt_List(o, i, type, is_signed, to_py_func, is_list, wraparound, boundscheck)\
+    (__Pyx_fits_Py_ssize_t(i, type, is_signed) ?\
+    __Pyx_GetItemInt_List_Fast(o, (Py_ssize_t)i, wraparound, boundscheck) :\
+    (PyErr_SetString(PyExc_IndexError, "list index out of range"), (PyObject*)NULL))
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_List_Fast(PyObject *o, Py_ssize_t i,
+                                                              int wraparound, int boundscheck);
+#define __Pyx_GetItemInt_Tuple(o, i, type, is_signed, to_py_func, is_list, wraparound, boundscheck)\
+    (__Pyx_fits_Py_ssize_t(i, type, is_signed) ?\
+    __Pyx_GetItemInt_Tuple_Fast(o, (Py_ssize_t)i, wraparound, boundscheck) :\
+    (PyErr_SetString(PyExc_IndexError, "tuple index out of range"), (PyObject*)NULL))
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_Tuple_Fast(PyObject *o, Py_ssize_t i,
+                                                              int wraparound, int boundscheck);
+static PyObject *__Pyx_GetItemInt_Generic(PyObject *o, PyObject* j);
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_Fast(PyObject *o, Py_ssize_t i,
+                                                     int is_list, int wraparound, int boundscheck);
+
+/* ListAppend.proto */
+#if CYTHON_USE_PYLIST_INTERNALS && CYTHON_ASSUME_SAFE_MACROS
+static CYTHON_INLINE int __Pyx_PyList_Append(PyObject* list, PyObject* x) {
+    PyListObject* L = (PyListObject*) list;
+    Py_ssize_t len = Py_SIZE(list);
+    if (likely(L->allocated > len) & likely(len > (L->allocated >> 1))) {
+        Py_INCREF(x);
+        #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030d0000
+        L->ob_item[len] = x;
+        #else
+        PyList_SET_ITEM(list, len, x);
+        #endif
+        __Pyx_SET_SIZE(list, len + 1);
+        return 0;
+    }
+    return PyList_Append(list, x);
+}
+#else
+#define __Pyx_PyList_Append(L,x) PyList_Append(L,x)
+#endif
+
 /* ListCompAppend.proto */
 #if CYTHON_USE_PYLIST_INTERNALS && CYTHON_ASSUME_SAFE_MACROS
 static CYTHON_INLINE int __Pyx_ListComp_Append(PyObject* list, PyObject* x) {
@@ -2014,6 +2129,12 @@ static PyObject *__Pyx_Import(PyObject *name, PyObject *from_list, int level);
 
 /* ImportFrom.proto */
 static PyObject* __Pyx_ImportFrom(PyObject* module, PyObject* name);
+
+/* ImportDottedModule.proto */
+static PyObject *__Pyx_ImportDottedModule(PyObject *name, PyObject *parts_tuple);
+#if PY_MAJOR_VERSION >= 3
+static PyObject *__Pyx_ImportDottedModule_WalkParts(PyObject *module, PyObject *name, PyObject *parts_tuple);
+#endif
 
 /* IncludeStructmemberH.proto */
 #include <structmember.h>
@@ -2191,11 +2312,129 @@ static void __pyx_insert_code_object(int code_line, PyCodeObject* code_object);
 static void __Pyx_AddTraceback(const char *funcname, int c_line,
                                int py_line, const char *filename);
 
+/* ArrayAPI.proto */
+#ifndef _ARRAYARRAY_H
+#define _ARRAYARRAY_H
+typedef struct arraydescr {
+    int typecode;
+    int itemsize;
+    PyObject * (*getitem)(struct arrayobject *, Py_ssize_t);
+    int (*setitem)(struct arrayobject *, Py_ssize_t, PyObject *);
+#if PY_MAJOR_VERSION >= 3
+    char *formats;
+#endif
+} arraydescr;
+struct arrayobject {
+    PyObject_HEAD
+    Py_ssize_t ob_size;
+    union {
+        char *ob_item;
+        float *as_floats;
+        double *as_doubles;
+        int *as_ints;
+        unsigned int *as_uints;
+        unsigned char *as_uchars;
+        signed char *as_schars;
+        char *as_chars;
+        unsigned long *as_ulongs;
+        long *as_longs;
+#if PY_MAJOR_VERSION >= 3
+        unsigned long long *as_ulonglongs;
+        long long *as_longlongs;
+#endif
+        short *as_shorts;
+        unsigned short *as_ushorts;
+        Py_UNICODE *as_pyunicodes;
+        void *as_voidptr;
+    } data;
+    Py_ssize_t allocated;
+    struct arraydescr *ob_descr;
+    PyObject *weakreflist;
+#if PY_MAJOR_VERSION >= 3
+        int ob_exports;
+#endif
+};
+#ifndef NO_NEWARRAY_INLINE
+static CYTHON_INLINE PyObject * newarrayobject(PyTypeObject *type, Py_ssize_t size,
+    struct arraydescr *descr) {
+    arrayobject *op;
+    size_t nbytes;
+    if (size < 0) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    nbytes = size * descr->itemsize;
+    if (nbytes / descr->itemsize != (size_t)size) {
+        return PyErr_NoMemory();
+    }
+    op = (arrayobject *) type->tp_alloc(type, 0);
+    if (op == NULL) {
+        return NULL;
+    }
+    op->ob_descr = descr;
+    op->allocated = size;
+    op->weakreflist = NULL;
+    __Pyx_SET_SIZE(op, size);
+    if (size <= 0) {
+        op->data.ob_item = NULL;
+    }
+    else {
+        op->data.ob_item = PyMem_NEW(char, nbytes);
+        if (op->data.ob_item == NULL) {
+            Py_DECREF(op);
+            return PyErr_NoMemory();
+        }
+    }
+    return (PyObject *) op;
+}
+#else
+PyObject* newarrayobject(PyTypeObject *type, Py_ssize_t size,
+    struct arraydescr *descr);
+#endif
+static CYTHON_INLINE int resize(arrayobject *self, Py_ssize_t n) {
+    void *items = (void*) self->data.ob_item;
+    PyMem_Resize(items, char, (size_t)(n * self->ob_descr->itemsize));
+    if (items == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    self->data.ob_item = (char*) items;
+    __Pyx_SET_SIZE(self, n);
+    self->allocated = n;
+    return 0;
+}
+static CYTHON_INLINE int resize_smart(arrayobject *self, Py_ssize_t n) {
+    void *items = (void*) self->data.ob_item;
+    Py_ssize_t newsize;
+    if (n < self->allocated && n*4 > self->allocated) {
+        __Pyx_SET_SIZE(self, n);
+        return 0;
+    }
+    newsize = n + (n / 2) + 1;
+    if (newsize <= n) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    PyMem_Resize(items, char, (size_t)(newsize * self->ob_descr->itemsize));
+    if (items == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    self->data.ob_item = (char*) items;
+    __Pyx_SET_SIZE(self, n);
+    self->allocated = newsize;
+    return 0;
+}
+#endif
+
 /* RaiseUnexpectedTypeError.proto */
 static int __Pyx_RaiseUnexpectedTypeError(const char *expected, PyObject *obj);
 
 struct __pyx_t_6tablut_Bitboard;
 static PyObject* __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(struct __pyx_t_6tablut_Bitboard s);
+/* CIntToPy.proto */
+static CYTHON_INLINE PyObject* __Pyx_PyInt_From_uint64_t(uint64_t value);
+
 /* CIntFromPy.proto */
 static CYTHON_INLINE uint64_t __Pyx_PyInt_As_uint64_t(PyObject *);
 
@@ -2203,13 +2442,7 @@ static CYTHON_INLINE uint64_t __Pyx_PyInt_As_uint64_t(PyObject *);
 static CYTHON_INLINE int __Pyx_PyInt_As_int(PyObject *);
 
 /* CIntToPy.proto */
-static CYTHON_INLINE PyObject* __Pyx_PyInt_From_uint64_t(uint64_t value);
-
-/* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_long(long value);
-
-/* CIntFromPy.proto */
-static CYTHON_INLINE long __Pyx_PyInt_As_long(PyObject *);
 
 /* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
@@ -2229,6 +2462,9 @@ typedef const char *__Pyx_TypeName;
 #define __Pyx_PyType_GetName(tp) ((tp)->tp_name)
 #define __Pyx_DECREF_TypeName(obj)
 #endif
+
+/* CIntFromPy.proto */
+static CYTHON_INLINE long __Pyx_PyInt_As_long(PyObject *);
 
 /* FastTypeChecks.proto */
 #if CYTHON_COMPILING_IN_CPYTHON
@@ -2255,6 +2491,8 @@ static int __Pyx_check_binary_version(unsigned long ct_version, unsigned long rt
 static int __Pyx_InitStrings(__Pyx_StringTabEntry *t);
 
 /* #### Code section: module_declarations ### */
+static CYTHON_INLINE double __pyx_f_7cpython_7complex_7complex_4real_real(PyComplexObject *__pyx_v_self); /* proto*/
+static CYTHON_INLINE double __pyx_f_7cpython_7complex_7complex_4imag_imag(PyComplexObject *__pyx_v_self); /* proto*/
 
 /* Module declarations from "libc.stdint" */
 
@@ -2266,19 +2504,93 @@ static int __Pyx_InitStrings(__Pyx_StringTabEntry *t);
 
 /* Module declarations from "cpython.type" */
 
+/* Module declarations from "cpython.version" */
+
+/* Module declarations from "cpython.ref" */
+
+/* Module declarations from "cpython.exc" */
+
+/* Module declarations from "cpython.module" */
+
+/* Module declarations from "cpython.mem" */
+
+/* Module declarations from "cpython.tuple" */
+
+/* Module declarations from "cpython.list" */
+
+/* Module declarations from "cpython.sequence" */
+
+/* Module declarations from "cpython.mapping" */
+
+/* Module declarations from "cpython.iterator" */
+
+/* Module declarations from "cpython.number" */
+
+/* Module declarations from "cpython.int" */
+
+/* Module declarations from "__builtin__" */
+
+/* Module declarations from "cpython.bool" */
+
+/* Module declarations from "cpython.long" */
+
+/* Module declarations from "cpython.float" */
+
+/* Module declarations from "__builtin__" */
+
+/* Module declarations from "cpython.complex" */
+
+/* Module declarations from "cpython.string" */
+
+/* Module declarations from "libc.stddef" */
+
+/* Module declarations from "cpython.unicode" */
+
+/* Module declarations from "cpython.pyport" */
+
+/* Module declarations from "cpython.instance" */
+
+/* Module declarations from "cpython.function" */
+
+/* Module declarations from "cpython.method" */
+
+/* Module declarations from "cpython.weakref" */
+
+/* Module declarations from "cpython.getargs" */
+
+/* Module declarations from "cpython.pythread" */
+
+/* Module declarations from "cpython.pystate" */
+
+/* Module declarations from "cpython.cobject" */
+
+/* Module declarations from "cpython.oldbuffer" */
+
+/* Module declarations from "cpython.set" */
+
+/* Module declarations from "cpython.buffer" */
+
+/* Module declarations from "cpython.bytes" */
+
+/* Module declarations from "cpython.pycapsule" */
+
+/* Module declarations from "cpython.contextvars" */
+
 /* Module declarations from "cpython" */
 
 /* Module declarations from "cpython.object" */
-
-/* Module declarations from "cpython.pyport" */
 
 /* Module declarations from "cpython.dict" */
 
 /* Module declarations from "libc.stdlib" */
 
-/* Module declarations from "libc.stddef" */
+/* Module declarations from "array" */
+
+/* Module declarations from "cpython.array" */
+static CYTHON_INLINE int __pyx_f_7cpython_5array_extend_buffer(arrayobject *, char *, Py_ssize_t); /*proto*/
 
 /* Module declarations from "tablut" */
+static struct __pyx_t_6tablut_Bitboard __pyx_v_6tablut_EMPTY_BITBOARD;
 static struct __pyx_t_6tablut_Bitboard __pyx_v_6tablut_BLOCKER_MASK[81];
 static int __pyx_v_6tablut_BLOCKER_BITS[81];
 static CYTHON_INLINE struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_get_blocker_mask(int); /*proto*/
@@ -2291,14 +2603,19 @@ static int __pyx_f_6tablut_count_bits_board(struct __pyx_t_6tablut_Bitboard); /*
 static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *); /*proto*/
 static void __pyx_f_6tablut_set_start_position(struct __pyx_t_6tablut_Bitboard *); /*proto*/
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_create_board(void); /*proto*/
+static CYTHON_INLINE PyObject *__pyx_f_6tablut_is_board_empty(struct __pyx_t_6tablut_Bitboard); /*proto*/
+static CYTHON_INLINE PyObject *__pyx_f_6tablut_same_board(struct __pyx_t_6tablut_Bitboard, struct __pyx_t_6tablut_Bitboard); /*proto*/
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __pyx_t_6tablut_Bitboard, int); /*proto*/
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struct __pyx_t_6tablut_Bitboard, int); /*proto*/
 static void __pyx_f_6tablut_print_masks(void); /*proto*/
 static void __pyx_f_6tablut_print_relevant_bits(void); /*proto*/
 static uint64_t __pyx_f_6tablut_random_u64(void); /*proto*/
+static uint64_t __pyx_f_6tablut_random_uint64_fewbits(void); /*proto*/
+static uint64_t __pyx_f_6tablut_transform(uint64_t, uint64_t, int); /*proto*/
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_carry_rippler_next(struct __pyx_t_6tablut_Bitboard, struct __pyx_t_6tablut_Bitboard); /*proto*/
 static struct __pyx_t_6tablut_BlockerMoveTables __pyx_f_6tablut_build_blocker_move_tables(int); /*proto*/
 static void __pyx_f_6tablut_free_blocker_move_tables(struct __pyx_t_6tablut_BlockerMoveTables *); /*proto*/
+static uint64_t __pyx_f_6tablut_find_magic(int); /*proto*/
 static struct __pyx_t_6tablut_Bitboard __pyx_convert__from_py_struct____pyx_t_6tablut_Bitboard(PyObject *); /*proto*/
 /* #### Code section: typeinfo ### */
 /* #### Code section: before_global_var ### */
@@ -2311,6 +2628,10 @@ int __pyx_module_is_main_tablut = 0;
 static PyObject *__pyx_builtin_ValueError;
 static PyObject *__pyx_builtin_range;
 static PyObject *__pyx_builtin_print;
+static PyObject *__pyx_builtin_MemoryError;
+static PyObject *__pyx_builtin_min;
+static PyObject *__pyx_builtin_max;
+static PyObject *__pyx_builtin_enumerate;
 static PyObject *__pyx_builtin_KeyError;
 /* #### Code section: string_decls ### */
 static const char __pyx_k_1[] = "1 ";
@@ -2324,38 +2645,66 @@ static const char __pyx_k__8[] = "\n";
 static const char __pyx_k_sq[] = "sq";
 static const char __pyx_k__10[] = "),";
 static const char __pyx_k__11[] = ", ";
-static const char __pyx_k__12[] = "----------------------------------";
-static const char __pyx_k__14[] = ".";
-static const char __pyx_k__24[] = "?";
+static const char __pyx_k__16[] = ")***";
+static const char __pyx_k__21[] = ",";
+static const char __pyx_k__22[] = "\n}";
+static const char __pyx_k__25[] = ".";
+static const char __pyx_k__26[] = "*";
+static const char __pyx_k__39[] = "?";
 static const char __pyx_k_end[] = "end";
 static const char __pyx_k_low[] = "low";
+static const char __pyx_k_max[] = "max";
+static const char __pyx_k_min[] = "min";
 static const char __pyx_k_tmp[] = "tmp";
 static const char __pyx_k_016X[] = "016X";
+static const char __pyx_k_0x_2[] = "0x";
+static const char __pyx_k_List[] = "List";
+static const char __pyx_k_ZERO[] = "ZERO";
+static const char __pyx_k_desc[] = "desc";
 static const char __pyx_k_file[] = "file";
 static const char __pyx_k_high[] = "high";
 static const char __pyx_k_main[] = "__main__";
 static const char __pyx_k_name[] = "__name__";
 static const char __pyx_k_rank[] = "rank";
+static const char __pyx_k_spec[] = "__spec__";
 static const char __pyx_k_test[] = "test";
 static const char __pyx_k_tqdm[] = "tqdm";
+static const char __pyx_k_unit[] = "unit";
+static const char __pyx_k_Magic[] = " Magic: ";
+static const char __pyx_k_array[] = "array";
 static const char __pyx_k_board[] = "board";
+static const char __pyx_k_magic[] = "magic";
 static const char __pyx_k_moves[] = "moves";
 static const char __pyx_k_print[] = "print";
 static const char __pyx_k_range[] = "range";
+static const char __pyx_k_Square[] = "Square ";
 static const char __pyx_k_import[] = "__import__";
+static const char __pyx_k_magics[] = "magics";
+static const char __pyx_k_random[] = "random";
 static const char __pyx_k_square[] = "square";
 static const char __pyx_k_tables[] = "tables";
 static const char __pyx_k_tablut[] = "tablut";
 static const char __pyx_k_test_2[] = "__test__";
+static const char __pyx_k_typing[] = "typing";
+static const char __pyx_k_entries[] = " entries (";
 static const char __pyx_k_high_0x[] = ", high = 0x";
+static const char __pyx_k_randint[] = "randint";
+static const char __pyx_k_squares[] = "squares";
 static const char __pyx_k_Bitboard[] = "Bitboard: ";
+static const char __pyx_k_COMPLETE[] = "\n****COMPLETE****";
 static const char __pyx_k_KeyError[] = "KeyError";
 static const char __pyx_k_blockers[] = "blockers";
+static const char __pyx_k_enumerate[] = "enumerate";
 static const char __pyx_k_ValueError[] = "ValueError";
 static const char __pyx_k_tablut_pyx[] = "tablut.pyx";
+static const char __pyx_k_MemoryError[] = "MemoryError";
+static const char __pyx_k_find_magics[] = "find_magics";
 static const char __pyx_k_print_board[] = "print_board";
-static const char __pyx_k_build_tables[] = "build_tables";
+static const char __pyx_k_initializing[] = "_initializing";
 static const char __pyx_k_is_coroutine[] = "_is_coroutine";
+static const char __pyx_k_square_array[] = "square_array";
+static const char __pyx_k_Testing_Magic[] = "Testing Magic";
+static const char __pyx_k_FINDING_MAGICS[] = "****FINDING MAGICS****\n";
 static const char __pyx_k_Bitboard_hex_0x[] = "Bitboard (hex): 0x";
 static const char __pyx_k_Bitboard_low_0x[] = "Bitboard(low = 0x";
 static const char __pyx_k_a_b_c_d_e_f_g_h_i[] = "  a b c d e f g h i";
@@ -2363,18 +2712,28 @@ static const char __pyx_k_asyncio_coroutines[] = "asyncio.coroutines";
 static const char __pyx_k_cline_in_traceback[] = "cline_in_traceback";
 static const char __pyx_k_no_piece_on_square[] = "no piece on square";
 static const char __pyx_k_print_blocker_bits[] = "print_blocker_bits";
+static const char __pyx_k_py_build_bm_tables[] = "py_build_bm_tables";
 static const char __pyx_k_print_blocker_masks[] = "print_blocker_masks";
 static const char __pyx_k_create_start_position[] = "create_start_position";
+static const char __pyx_k_cdef_uint64_t_Magic_81[] = "cdef uint64_t Magic[81] = {";
+static const char __pyx_k_Best_Magic_passed_first[] = ". Best Magic passed first ";
 static const char __pyx_k_Bit_index_must_be_between_0_and[] = "Bit index must be between 0 and 80";
+static const char __pyx_k_Failed_to_find_Magic_for_square[] = "***Failed to find Magic for square ";
+static const char __pyx_k_Failed_to_allocate_memory_for_bl[] = "Failed to allocate memory for blocker move tables";
+static const char __pyx_k_Failed_to_allocate_memory_for_us[] = "Failed to allocate memory for used array";
+static const char __pyx_k_Invalid_square_s_Must_be_0_squar[] = "Invalid square(s). Must be: 0 <= square <= 80";
 static const char __pyx_k_No_value_specified_for_struct_at[] = "No value specified for struct attribute 'low'";
 static const char __pyx_k_No_value_specified_for_struct_at_2[] = "No value specified for struct attribute 'high'";
 /* #### Code section: decls ### */
+static int __pyx_pf_7cpython_5array_5array___getbuffer__(arrayobject *__pyx_v_self, Py_buffer *__pyx_v_info, CYTHON_UNUSED int __pyx_v_flags); /* proto */
+static void __pyx_pf_7cpython_5array_5array_2__releasebuffer__(CYTHON_UNUSED arrayobject *__pyx_v_self, Py_buffer *__pyx_v_info); /* proto */
 static PyObject *__pyx_pf_6tablut_create_start_position(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
 static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_self, struct __pyx_t_6tablut_Bitboard __pyx_v_board); /* proto */
-static PyObject *__pyx_pf_6tablut_4print_blocker_masks(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
-static PyObject *__pyx_pf_6tablut_6print_blocker_bits(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
-static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
-static PyObject *__pyx_pf_6tablut_10build_tables(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_square); /* proto */
+static PyObject *__pyx_pf_6tablut_4find_magics(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_squares); /* proto */
+static PyObject *__pyx_pf_6tablut_6print_blocker_masks(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
+static PyObject *__pyx_pf_6tablut_8print_blocker_bits(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
+static PyObject *__pyx_pf_6tablut_10test(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
+static PyObject *__pyx_pf_6tablut_12py_build_bm_tables(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_square); /* proto */
 /* #### Code section: late_includes ### */
 /* #### Code section: module_state ### */
 typedef struct {
@@ -2427,42 +2786,146 @@ typedef struct {
   #endif
   #if CYTHON_USE_MODULE_STATE
   #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  PyTypeObject *__pyx_ptype_7cpython_4bool_bool;
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  PyTypeObject *__pyx_ptype_7cpython_7complex_complex;
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  #if CYTHON_USE_MODULE_STATE
+  #endif
+  PyTypeObject *__pyx_ptype_7cpython_5array_array;
+  #if CYTHON_USE_MODULE_STATE
+  #endif
   PyObject *__pyx_kp_u_016X;
   PyObject *__pyx_kp_u_0x;
+  PyObject *__pyx_kp_u_0x_2;
   PyObject *__pyx_kp_u_1;
+  PyObject *__pyx_kp_u_Best_Magic_passed_first;
   PyObject *__pyx_kp_u_Bit_index_must_be_between_0_and;
   PyObject *__pyx_kp_u_Bitboard;
   PyObject *__pyx_kp_u_Bitboard_hex_0x;
   PyObject *__pyx_kp_u_Bitboard_low_0x;
+  PyObject *__pyx_kp_u_COMPLETE;
+  PyObject *__pyx_kp_u_FINDING_MAGICS;
+  PyObject *__pyx_kp_u_Failed_to_allocate_memory_for_bl;
+  PyObject *__pyx_kp_u_Failed_to_allocate_memory_for_us;
+  PyObject *__pyx_kp_u_Failed_to_find_Magic_for_square;
+  PyObject *__pyx_kp_u_Invalid_square_s_Must_be_0_squar;
   PyObject *__pyx_n_s_KeyError;
+  PyObject *__pyx_n_s_List;
+  PyObject *__pyx_kp_u_Magic;
+  PyObject *__pyx_n_s_MemoryError;
   PyObject *__pyx_kp_s_No_value_specified_for_struct_at;
   PyObject *__pyx_kp_s_No_value_specified_for_struct_at_2;
+  PyObject *__pyx_kp_u_Square;
+  PyObject *__pyx_kp_u_Testing_Magic;
   PyObject *__pyx_n_s_ValueError;
+  PyObject *__pyx_n_s_ZERO;
   PyObject *__pyx_kp_u__10;
   PyObject *__pyx_kp_u__11;
-  PyObject *__pyx_kp_u__12;
-  PyObject *__pyx_kp_u__14;
-  PyObject *__pyx_n_s__24;
+  PyObject *__pyx_kp_u__16;
+  PyObject *__pyx_kp_u__21;
+  PyObject *__pyx_kp_u__22;
+  PyObject *__pyx_kp_u__25;
+  PyObject *__pyx_n_s__26;
+  PyObject *__pyx_n_s__39;
   PyObject *__pyx_kp_u__4;
   PyObject *__pyx_kp_u__5;
   PyObject *__pyx_kp_u__6;
   PyObject *__pyx_kp_u__8;
   PyObject *__pyx_kp_u_a_b_c_d_e_f_g_h_i;
+  PyObject *__pyx_n_s_array;
   PyObject *__pyx_n_s_asyncio_coroutines;
   PyObject *__pyx_n_s_blockers;
   PyObject *__pyx_n_s_board;
-  PyObject *__pyx_n_s_build_tables;
+  PyObject *__pyx_kp_u_cdef_uint64_t_Magic_81;
   PyObject *__pyx_n_s_cline_in_traceback;
   PyObject *__pyx_n_s_create_start_position;
+  PyObject *__pyx_n_s_desc;
   PyObject *__pyx_n_s_end;
+  PyObject *__pyx_kp_u_entries;
+  PyObject *__pyx_n_s_enumerate;
   PyObject *__pyx_n_s_file;
+  PyObject *__pyx_n_s_find_magics;
   PyObject *__pyx_n_s_high;
   PyObject *__pyx_kp_u_high_0x;
   PyObject *__pyx_n_s_i;
+  PyObject *__pyx_n_u_i;
   PyObject *__pyx_n_s_import;
+  PyObject *__pyx_n_s_initializing;
   PyObject *__pyx_n_s_is_coroutine;
   PyObject *__pyx_n_s_low;
+  PyObject *__pyx_n_s_magic;
+  PyObject *__pyx_n_u_magic;
+  PyObject *__pyx_n_s_magics;
   PyObject *__pyx_n_s_main;
+  PyObject *__pyx_n_s_max;
+  PyObject *__pyx_n_s_min;
   PyObject *__pyx_n_s_moves;
   PyObject *__pyx_n_s_name;
   PyObject *__pyx_kp_u_no_piece_on_square;
@@ -2470,11 +2933,17 @@ typedef struct {
   PyObject *__pyx_n_s_print_blocker_bits;
   PyObject *__pyx_n_s_print_blocker_masks;
   PyObject *__pyx_n_s_print_board;
+  PyObject *__pyx_n_s_py_build_bm_tables;
   PyObject *__pyx_n_s_r;
+  PyObject *__pyx_n_s_randint;
+  PyObject *__pyx_n_s_random;
   PyObject *__pyx_n_s_range;
   PyObject *__pyx_n_s_rank;
+  PyObject *__pyx_n_s_spec;
   PyObject *__pyx_n_s_sq;
   PyObject *__pyx_n_s_square;
+  PyObject *__pyx_n_s_square_array;
+  PyObject *__pyx_n_s_squares;
   PyObject *__pyx_n_s_tables;
   PyObject *__pyx_n_s_tablut;
   PyObject *__pyx_kp_s_tablut_pyx;
@@ -2482,21 +2951,42 @@ typedef struct {
   PyObject *__pyx_n_s_test_2;
   PyObject *__pyx_n_s_tmp;
   PyObject *__pyx_n_s_tqdm;
+  PyObject *__pyx_n_s_typing;
+  PyObject *__pyx_n_s_unit;
+  PyObject *__pyx_int_0;
+  PyObject *__pyx_int_32;
+  PyObject *__pyx_int_80;
+  PyObject *__pyx_int_81;
+  PyObject *__pyx_int_1000000000;
+  PyObject *__pyx_int_4294967295;
+  PyObject *__pyx_int_0xff00000000000000;
   PyObject *__pyx_tuple_;
   PyObject *__pyx_tuple__2;
   PyObject *__pyx_tuple__3;
   PyObject *__pyx_tuple__7;
   PyObject *__pyx_tuple__9;
+  PyObject *__pyx_tuple__12;
   PyObject *__pyx_tuple__13;
-  PyObject *__pyx_tuple__16;
+  PyObject *__pyx_tuple__14;
+  PyObject *__pyx_tuple__15;
+  PyObject *__pyx_tuple__17;
+  PyObject *__pyx_tuple__18;
+  PyObject *__pyx_tuple__19;
   PyObject *__pyx_tuple__20;
-  PyObject *__pyx_tuple__22;
-  PyObject *__pyx_codeobj__15;
-  PyObject *__pyx_codeobj__17;
-  PyObject *__pyx_codeobj__18;
-  PyObject *__pyx_codeobj__19;
-  PyObject *__pyx_codeobj__21;
-  PyObject *__pyx_codeobj__23;
+  PyObject *__pyx_tuple__23;
+  PyObject *__pyx_tuple__24;
+  PyObject *__pyx_tuple__28;
+  PyObject *__pyx_tuple__30;
+  PyObject *__pyx_tuple__32;
+  PyObject *__pyx_tuple__35;
+  PyObject *__pyx_tuple__37;
+  PyObject *__pyx_codeobj__27;
+  PyObject *__pyx_codeobj__29;
+  PyObject *__pyx_codeobj__31;
+  PyObject *__pyx_codeobj__33;
+  PyObject *__pyx_codeobj__34;
+  PyObject *__pyx_codeobj__36;
+  PyObject *__pyx_codeobj__38;
 } __pyx_mstate;
 
 #if CYTHON_USE_MODULE_STATE
@@ -2540,42 +3030,74 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_FusedFunctionType);
   #endif
   Py_CLEAR(clear_module_state->__pyx_ptype_7cpython_4type_type);
+  Py_CLEAR(clear_module_state->__pyx_ptype_7cpython_4bool_bool);
+  Py_CLEAR(clear_module_state->__pyx_ptype_7cpython_7complex_complex);
+  Py_CLEAR(clear_module_state->__pyx_ptype_7cpython_5array_array);
   Py_CLEAR(clear_module_state->__pyx_kp_u_016X);
   Py_CLEAR(clear_module_state->__pyx_kp_u_0x);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_0x_2);
   Py_CLEAR(clear_module_state->__pyx_kp_u_1);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Best_Magic_passed_first);
   Py_CLEAR(clear_module_state->__pyx_kp_u_Bit_index_must_be_between_0_and);
   Py_CLEAR(clear_module_state->__pyx_kp_u_Bitboard);
   Py_CLEAR(clear_module_state->__pyx_kp_u_Bitboard_hex_0x);
   Py_CLEAR(clear_module_state->__pyx_kp_u_Bitboard_low_0x);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_COMPLETE);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_FINDING_MAGICS);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Failed_to_allocate_memory_for_bl);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Failed_to_allocate_memory_for_us);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Failed_to_find_Magic_for_square);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Invalid_square_s_Must_be_0_squar);
   Py_CLEAR(clear_module_state->__pyx_n_s_KeyError);
+  Py_CLEAR(clear_module_state->__pyx_n_s_List);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Magic);
+  Py_CLEAR(clear_module_state->__pyx_n_s_MemoryError);
   Py_CLEAR(clear_module_state->__pyx_kp_s_No_value_specified_for_struct_at);
   Py_CLEAR(clear_module_state->__pyx_kp_s_No_value_specified_for_struct_at_2);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Square);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_Testing_Magic);
   Py_CLEAR(clear_module_state->__pyx_n_s_ValueError);
+  Py_CLEAR(clear_module_state->__pyx_n_s_ZERO);
   Py_CLEAR(clear_module_state->__pyx_kp_u__10);
   Py_CLEAR(clear_module_state->__pyx_kp_u__11);
-  Py_CLEAR(clear_module_state->__pyx_kp_u__12);
-  Py_CLEAR(clear_module_state->__pyx_kp_u__14);
-  Py_CLEAR(clear_module_state->__pyx_n_s__24);
+  Py_CLEAR(clear_module_state->__pyx_kp_u__16);
+  Py_CLEAR(clear_module_state->__pyx_kp_u__21);
+  Py_CLEAR(clear_module_state->__pyx_kp_u__22);
+  Py_CLEAR(clear_module_state->__pyx_kp_u__25);
+  Py_CLEAR(clear_module_state->__pyx_n_s__26);
+  Py_CLEAR(clear_module_state->__pyx_n_s__39);
   Py_CLEAR(clear_module_state->__pyx_kp_u__4);
   Py_CLEAR(clear_module_state->__pyx_kp_u__5);
   Py_CLEAR(clear_module_state->__pyx_kp_u__6);
   Py_CLEAR(clear_module_state->__pyx_kp_u__8);
   Py_CLEAR(clear_module_state->__pyx_kp_u_a_b_c_d_e_f_g_h_i);
+  Py_CLEAR(clear_module_state->__pyx_n_s_array);
   Py_CLEAR(clear_module_state->__pyx_n_s_asyncio_coroutines);
   Py_CLEAR(clear_module_state->__pyx_n_s_blockers);
   Py_CLEAR(clear_module_state->__pyx_n_s_board);
-  Py_CLEAR(clear_module_state->__pyx_n_s_build_tables);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_cdef_uint64_t_Magic_81);
   Py_CLEAR(clear_module_state->__pyx_n_s_cline_in_traceback);
   Py_CLEAR(clear_module_state->__pyx_n_s_create_start_position);
+  Py_CLEAR(clear_module_state->__pyx_n_s_desc);
   Py_CLEAR(clear_module_state->__pyx_n_s_end);
+  Py_CLEAR(clear_module_state->__pyx_kp_u_entries);
+  Py_CLEAR(clear_module_state->__pyx_n_s_enumerate);
   Py_CLEAR(clear_module_state->__pyx_n_s_file);
+  Py_CLEAR(clear_module_state->__pyx_n_s_find_magics);
   Py_CLEAR(clear_module_state->__pyx_n_s_high);
   Py_CLEAR(clear_module_state->__pyx_kp_u_high_0x);
   Py_CLEAR(clear_module_state->__pyx_n_s_i);
+  Py_CLEAR(clear_module_state->__pyx_n_u_i);
   Py_CLEAR(clear_module_state->__pyx_n_s_import);
+  Py_CLEAR(clear_module_state->__pyx_n_s_initializing);
   Py_CLEAR(clear_module_state->__pyx_n_s_is_coroutine);
   Py_CLEAR(clear_module_state->__pyx_n_s_low);
+  Py_CLEAR(clear_module_state->__pyx_n_s_magic);
+  Py_CLEAR(clear_module_state->__pyx_n_u_magic);
+  Py_CLEAR(clear_module_state->__pyx_n_s_magics);
   Py_CLEAR(clear_module_state->__pyx_n_s_main);
+  Py_CLEAR(clear_module_state->__pyx_n_s_max);
+  Py_CLEAR(clear_module_state->__pyx_n_s_min);
   Py_CLEAR(clear_module_state->__pyx_n_s_moves);
   Py_CLEAR(clear_module_state->__pyx_n_s_name);
   Py_CLEAR(clear_module_state->__pyx_kp_u_no_piece_on_square);
@@ -2583,11 +3105,17 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_print_blocker_bits);
   Py_CLEAR(clear_module_state->__pyx_n_s_print_blocker_masks);
   Py_CLEAR(clear_module_state->__pyx_n_s_print_board);
+  Py_CLEAR(clear_module_state->__pyx_n_s_py_build_bm_tables);
   Py_CLEAR(clear_module_state->__pyx_n_s_r);
+  Py_CLEAR(clear_module_state->__pyx_n_s_randint);
+  Py_CLEAR(clear_module_state->__pyx_n_s_random);
   Py_CLEAR(clear_module_state->__pyx_n_s_range);
   Py_CLEAR(clear_module_state->__pyx_n_s_rank);
+  Py_CLEAR(clear_module_state->__pyx_n_s_spec);
   Py_CLEAR(clear_module_state->__pyx_n_s_sq);
   Py_CLEAR(clear_module_state->__pyx_n_s_square);
+  Py_CLEAR(clear_module_state->__pyx_n_s_square_array);
+  Py_CLEAR(clear_module_state->__pyx_n_s_squares);
   Py_CLEAR(clear_module_state->__pyx_n_s_tables);
   Py_CLEAR(clear_module_state->__pyx_n_s_tablut);
   Py_CLEAR(clear_module_state->__pyx_kp_s_tablut_pyx);
@@ -2595,21 +3123,42 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_test_2);
   Py_CLEAR(clear_module_state->__pyx_n_s_tmp);
   Py_CLEAR(clear_module_state->__pyx_n_s_tqdm);
+  Py_CLEAR(clear_module_state->__pyx_n_s_typing);
+  Py_CLEAR(clear_module_state->__pyx_n_s_unit);
+  Py_CLEAR(clear_module_state->__pyx_int_0);
+  Py_CLEAR(clear_module_state->__pyx_int_32);
+  Py_CLEAR(clear_module_state->__pyx_int_80);
+  Py_CLEAR(clear_module_state->__pyx_int_81);
+  Py_CLEAR(clear_module_state->__pyx_int_1000000000);
+  Py_CLEAR(clear_module_state->__pyx_int_4294967295);
+  Py_CLEAR(clear_module_state->__pyx_int_0xff00000000000000);
   Py_CLEAR(clear_module_state->__pyx_tuple_);
   Py_CLEAR(clear_module_state->__pyx_tuple__2);
   Py_CLEAR(clear_module_state->__pyx_tuple__3);
   Py_CLEAR(clear_module_state->__pyx_tuple__7);
   Py_CLEAR(clear_module_state->__pyx_tuple__9);
+  Py_CLEAR(clear_module_state->__pyx_tuple__12);
   Py_CLEAR(clear_module_state->__pyx_tuple__13);
-  Py_CLEAR(clear_module_state->__pyx_tuple__16);
+  Py_CLEAR(clear_module_state->__pyx_tuple__14);
+  Py_CLEAR(clear_module_state->__pyx_tuple__15);
+  Py_CLEAR(clear_module_state->__pyx_tuple__17);
+  Py_CLEAR(clear_module_state->__pyx_tuple__18);
+  Py_CLEAR(clear_module_state->__pyx_tuple__19);
   Py_CLEAR(clear_module_state->__pyx_tuple__20);
-  Py_CLEAR(clear_module_state->__pyx_tuple__22);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__15);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__17);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__18);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__19);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__21);
-  Py_CLEAR(clear_module_state->__pyx_codeobj__23);
+  Py_CLEAR(clear_module_state->__pyx_tuple__23);
+  Py_CLEAR(clear_module_state->__pyx_tuple__24);
+  Py_CLEAR(clear_module_state->__pyx_tuple__28);
+  Py_CLEAR(clear_module_state->__pyx_tuple__30);
+  Py_CLEAR(clear_module_state->__pyx_tuple__32);
+  Py_CLEAR(clear_module_state->__pyx_tuple__35);
+  Py_CLEAR(clear_module_state->__pyx_tuple__37);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__27);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__29);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__31);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__33);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__34);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__36);
+  Py_CLEAR(clear_module_state->__pyx_codeobj__38);
   return 0;
 }
 #endif
@@ -2631,42 +3180,74 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_FusedFunctionType);
   #endif
   Py_VISIT(traverse_module_state->__pyx_ptype_7cpython_4type_type);
+  Py_VISIT(traverse_module_state->__pyx_ptype_7cpython_4bool_bool);
+  Py_VISIT(traverse_module_state->__pyx_ptype_7cpython_7complex_complex);
+  Py_VISIT(traverse_module_state->__pyx_ptype_7cpython_5array_array);
   Py_VISIT(traverse_module_state->__pyx_kp_u_016X);
   Py_VISIT(traverse_module_state->__pyx_kp_u_0x);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_0x_2);
   Py_VISIT(traverse_module_state->__pyx_kp_u_1);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Best_Magic_passed_first);
   Py_VISIT(traverse_module_state->__pyx_kp_u_Bit_index_must_be_between_0_and);
   Py_VISIT(traverse_module_state->__pyx_kp_u_Bitboard);
   Py_VISIT(traverse_module_state->__pyx_kp_u_Bitboard_hex_0x);
   Py_VISIT(traverse_module_state->__pyx_kp_u_Bitboard_low_0x);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_COMPLETE);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_FINDING_MAGICS);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Failed_to_allocate_memory_for_bl);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Failed_to_allocate_memory_for_us);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Failed_to_find_Magic_for_square);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Invalid_square_s_Must_be_0_squar);
   Py_VISIT(traverse_module_state->__pyx_n_s_KeyError);
+  Py_VISIT(traverse_module_state->__pyx_n_s_List);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Magic);
+  Py_VISIT(traverse_module_state->__pyx_n_s_MemoryError);
   Py_VISIT(traverse_module_state->__pyx_kp_s_No_value_specified_for_struct_at);
   Py_VISIT(traverse_module_state->__pyx_kp_s_No_value_specified_for_struct_at_2);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Square);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_Testing_Magic);
   Py_VISIT(traverse_module_state->__pyx_n_s_ValueError);
+  Py_VISIT(traverse_module_state->__pyx_n_s_ZERO);
   Py_VISIT(traverse_module_state->__pyx_kp_u__10);
   Py_VISIT(traverse_module_state->__pyx_kp_u__11);
-  Py_VISIT(traverse_module_state->__pyx_kp_u__12);
-  Py_VISIT(traverse_module_state->__pyx_kp_u__14);
-  Py_VISIT(traverse_module_state->__pyx_n_s__24);
+  Py_VISIT(traverse_module_state->__pyx_kp_u__16);
+  Py_VISIT(traverse_module_state->__pyx_kp_u__21);
+  Py_VISIT(traverse_module_state->__pyx_kp_u__22);
+  Py_VISIT(traverse_module_state->__pyx_kp_u__25);
+  Py_VISIT(traverse_module_state->__pyx_n_s__26);
+  Py_VISIT(traverse_module_state->__pyx_n_s__39);
   Py_VISIT(traverse_module_state->__pyx_kp_u__4);
   Py_VISIT(traverse_module_state->__pyx_kp_u__5);
   Py_VISIT(traverse_module_state->__pyx_kp_u__6);
   Py_VISIT(traverse_module_state->__pyx_kp_u__8);
   Py_VISIT(traverse_module_state->__pyx_kp_u_a_b_c_d_e_f_g_h_i);
+  Py_VISIT(traverse_module_state->__pyx_n_s_array);
   Py_VISIT(traverse_module_state->__pyx_n_s_asyncio_coroutines);
   Py_VISIT(traverse_module_state->__pyx_n_s_blockers);
   Py_VISIT(traverse_module_state->__pyx_n_s_board);
-  Py_VISIT(traverse_module_state->__pyx_n_s_build_tables);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_cdef_uint64_t_Magic_81);
   Py_VISIT(traverse_module_state->__pyx_n_s_cline_in_traceback);
   Py_VISIT(traverse_module_state->__pyx_n_s_create_start_position);
+  Py_VISIT(traverse_module_state->__pyx_n_s_desc);
   Py_VISIT(traverse_module_state->__pyx_n_s_end);
+  Py_VISIT(traverse_module_state->__pyx_kp_u_entries);
+  Py_VISIT(traverse_module_state->__pyx_n_s_enumerate);
   Py_VISIT(traverse_module_state->__pyx_n_s_file);
+  Py_VISIT(traverse_module_state->__pyx_n_s_find_magics);
   Py_VISIT(traverse_module_state->__pyx_n_s_high);
   Py_VISIT(traverse_module_state->__pyx_kp_u_high_0x);
   Py_VISIT(traverse_module_state->__pyx_n_s_i);
+  Py_VISIT(traverse_module_state->__pyx_n_u_i);
   Py_VISIT(traverse_module_state->__pyx_n_s_import);
+  Py_VISIT(traverse_module_state->__pyx_n_s_initializing);
   Py_VISIT(traverse_module_state->__pyx_n_s_is_coroutine);
   Py_VISIT(traverse_module_state->__pyx_n_s_low);
+  Py_VISIT(traverse_module_state->__pyx_n_s_magic);
+  Py_VISIT(traverse_module_state->__pyx_n_u_magic);
+  Py_VISIT(traverse_module_state->__pyx_n_s_magics);
   Py_VISIT(traverse_module_state->__pyx_n_s_main);
+  Py_VISIT(traverse_module_state->__pyx_n_s_max);
+  Py_VISIT(traverse_module_state->__pyx_n_s_min);
   Py_VISIT(traverse_module_state->__pyx_n_s_moves);
   Py_VISIT(traverse_module_state->__pyx_n_s_name);
   Py_VISIT(traverse_module_state->__pyx_kp_u_no_piece_on_square);
@@ -2674,11 +3255,17 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_print_blocker_bits);
   Py_VISIT(traverse_module_state->__pyx_n_s_print_blocker_masks);
   Py_VISIT(traverse_module_state->__pyx_n_s_print_board);
+  Py_VISIT(traverse_module_state->__pyx_n_s_py_build_bm_tables);
   Py_VISIT(traverse_module_state->__pyx_n_s_r);
+  Py_VISIT(traverse_module_state->__pyx_n_s_randint);
+  Py_VISIT(traverse_module_state->__pyx_n_s_random);
   Py_VISIT(traverse_module_state->__pyx_n_s_range);
   Py_VISIT(traverse_module_state->__pyx_n_s_rank);
+  Py_VISIT(traverse_module_state->__pyx_n_s_spec);
   Py_VISIT(traverse_module_state->__pyx_n_s_sq);
   Py_VISIT(traverse_module_state->__pyx_n_s_square);
+  Py_VISIT(traverse_module_state->__pyx_n_s_square_array);
+  Py_VISIT(traverse_module_state->__pyx_n_s_squares);
   Py_VISIT(traverse_module_state->__pyx_n_s_tables);
   Py_VISIT(traverse_module_state->__pyx_n_s_tablut);
   Py_VISIT(traverse_module_state->__pyx_kp_s_tablut_pyx);
@@ -2686,21 +3273,42 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_test_2);
   Py_VISIT(traverse_module_state->__pyx_n_s_tmp);
   Py_VISIT(traverse_module_state->__pyx_n_s_tqdm);
+  Py_VISIT(traverse_module_state->__pyx_n_s_typing);
+  Py_VISIT(traverse_module_state->__pyx_n_s_unit);
+  Py_VISIT(traverse_module_state->__pyx_int_0);
+  Py_VISIT(traverse_module_state->__pyx_int_32);
+  Py_VISIT(traverse_module_state->__pyx_int_80);
+  Py_VISIT(traverse_module_state->__pyx_int_81);
+  Py_VISIT(traverse_module_state->__pyx_int_1000000000);
+  Py_VISIT(traverse_module_state->__pyx_int_4294967295);
+  Py_VISIT(traverse_module_state->__pyx_int_0xff00000000000000);
   Py_VISIT(traverse_module_state->__pyx_tuple_);
   Py_VISIT(traverse_module_state->__pyx_tuple__2);
   Py_VISIT(traverse_module_state->__pyx_tuple__3);
   Py_VISIT(traverse_module_state->__pyx_tuple__7);
   Py_VISIT(traverse_module_state->__pyx_tuple__9);
+  Py_VISIT(traverse_module_state->__pyx_tuple__12);
   Py_VISIT(traverse_module_state->__pyx_tuple__13);
-  Py_VISIT(traverse_module_state->__pyx_tuple__16);
+  Py_VISIT(traverse_module_state->__pyx_tuple__14);
+  Py_VISIT(traverse_module_state->__pyx_tuple__15);
+  Py_VISIT(traverse_module_state->__pyx_tuple__17);
+  Py_VISIT(traverse_module_state->__pyx_tuple__18);
+  Py_VISIT(traverse_module_state->__pyx_tuple__19);
   Py_VISIT(traverse_module_state->__pyx_tuple__20);
-  Py_VISIT(traverse_module_state->__pyx_tuple__22);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__15);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__17);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__18);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__19);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__21);
-  Py_VISIT(traverse_module_state->__pyx_codeobj__23);
+  Py_VISIT(traverse_module_state->__pyx_tuple__23);
+  Py_VISIT(traverse_module_state->__pyx_tuple__24);
+  Py_VISIT(traverse_module_state->__pyx_tuple__28);
+  Py_VISIT(traverse_module_state->__pyx_tuple__30);
+  Py_VISIT(traverse_module_state->__pyx_tuple__32);
+  Py_VISIT(traverse_module_state->__pyx_tuple__35);
+  Py_VISIT(traverse_module_state->__pyx_tuple__37);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__27);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__29);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__31);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__33);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__34);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__36);
+  Py_VISIT(traverse_module_state->__pyx_codeobj__38);
   return 0;
 }
 #endif
@@ -2754,42 +3362,146 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #endif
 #if CYTHON_USE_MODULE_STATE
 #endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#define __pyx_ptype_7cpython_4bool_bool __pyx_mstate_global->__pyx_ptype_7cpython_4bool_bool
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#define __pyx_ptype_7cpython_7complex_complex __pyx_mstate_global->__pyx_ptype_7cpython_7complex_complex
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#if CYTHON_USE_MODULE_STATE
+#endif
+#define __pyx_ptype_7cpython_5array_array __pyx_mstate_global->__pyx_ptype_7cpython_5array_array
+#if CYTHON_USE_MODULE_STATE
+#endif
 #define __pyx_kp_u_016X __pyx_mstate_global->__pyx_kp_u_016X
 #define __pyx_kp_u_0x __pyx_mstate_global->__pyx_kp_u_0x
+#define __pyx_kp_u_0x_2 __pyx_mstate_global->__pyx_kp_u_0x_2
 #define __pyx_kp_u_1 __pyx_mstate_global->__pyx_kp_u_1
+#define __pyx_kp_u_Best_Magic_passed_first __pyx_mstate_global->__pyx_kp_u_Best_Magic_passed_first
 #define __pyx_kp_u_Bit_index_must_be_between_0_and __pyx_mstate_global->__pyx_kp_u_Bit_index_must_be_between_0_and
 #define __pyx_kp_u_Bitboard __pyx_mstate_global->__pyx_kp_u_Bitboard
 #define __pyx_kp_u_Bitboard_hex_0x __pyx_mstate_global->__pyx_kp_u_Bitboard_hex_0x
 #define __pyx_kp_u_Bitboard_low_0x __pyx_mstate_global->__pyx_kp_u_Bitboard_low_0x
+#define __pyx_kp_u_COMPLETE __pyx_mstate_global->__pyx_kp_u_COMPLETE
+#define __pyx_kp_u_FINDING_MAGICS __pyx_mstate_global->__pyx_kp_u_FINDING_MAGICS
+#define __pyx_kp_u_Failed_to_allocate_memory_for_bl __pyx_mstate_global->__pyx_kp_u_Failed_to_allocate_memory_for_bl
+#define __pyx_kp_u_Failed_to_allocate_memory_for_us __pyx_mstate_global->__pyx_kp_u_Failed_to_allocate_memory_for_us
+#define __pyx_kp_u_Failed_to_find_Magic_for_square __pyx_mstate_global->__pyx_kp_u_Failed_to_find_Magic_for_square
+#define __pyx_kp_u_Invalid_square_s_Must_be_0_squar __pyx_mstate_global->__pyx_kp_u_Invalid_square_s_Must_be_0_squar
 #define __pyx_n_s_KeyError __pyx_mstate_global->__pyx_n_s_KeyError
+#define __pyx_n_s_List __pyx_mstate_global->__pyx_n_s_List
+#define __pyx_kp_u_Magic __pyx_mstate_global->__pyx_kp_u_Magic
+#define __pyx_n_s_MemoryError __pyx_mstate_global->__pyx_n_s_MemoryError
 #define __pyx_kp_s_No_value_specified_for_struct_at __pyx_mstate_global->__pyx_kp_s_No_value_specified_for_struct_at
 #define __pyx_kp_s_No_value_specified_for_struct_at_2 __pyx_mstate_global->__pyx_kp_s_No_value_specified_for_struct_at_2
+#define __pyx_kp_u_Square __pyx_mstate_global->__pyx_kp_u_Square
+#define __pyx_kp_u_Testing_Magic __pyx_mstate_global->__pyx_kp_u_Testing_Magic
 #define __pyx_n_s_ValueError __pyx_mstate_global->__pyx_n_s_ValueError
+#define __pyx_n_s_ZERO __pyx_mstate_global->__pyx_n_s_ZERO
 #define __pyx_kp_u__10 __pyx_mstate_global->__pyx_kp_u__10
 #define __pyx_kp_u__11 __pyx_mstate_global->__pyx_kp_u__11
-#define __pyx_kp_u__12 __pyx_mstate_global->__pyx_kp_u__12
-#define __pyx_kp_u__14 __pyx_mstate_global->__pyx_kp_u__14
-#define __pyx_n_s__24 __pyx_mstate_global->__pyx_n_s__24
+#define __pyx_kp_u__16 __pyx_mstate_global->__pyx_kp_u__16
+#define __pyx_kp_u__21 __pyx_mstate_global->__pyx_kp_u__21
+#define __pyx_kp_u__22 __pyx_mstate_global->__pyx_kp_u__22
+#define __pyx_kp_u__25 __pyx_mstate_global->__pyx_kp_u__25
+#define __pyx_n_s__26 __pyx_mstate_global->__pyx_n_s__26
+#define __pyx_n_s__39 __pyx_mstate_global->__pyx_n_s__39
 #define __pyx_kp_u__4 __pyx_mstate_global->__pyx_kp_u__4
 #define __pyx_kp_u__5 __pyx_mstate_global->__pyx_kp_u__5
 #define __pyx_kp_u__6 __pyx_mstate_global->__pyx_kp_u__6
 #define __pyx_kp_u__8 __pyx_mstate_global->__pyx_kp_u__8
 #define __pyx_kp_u_a_b_c_d_e_f_g_h_i __pyx_mstate_global->__pyx_kp_u_a_b_c_d_e_f_g_h_i
+#define __pyx_n_s_array __pyx_mstate_global->__pyx_n_s_array
 #define __pyx_n_s_asyncio_coroutines __pyx_mstate_global->__pyx_n_s_asyncio_coroutines
 #define __pyx_n_s_blockers __pyx_mstate_global->__pyx_n_s_blockers
 #define __pyx_n_s_board __pyx_mstate_global->__pyx_n_s_board
-#define __pyx_n_s_build_tables __pyx_mstate_global->__pyx_n_s_build_tables
+#define __pyx_kp_u_cdef_uint64_t_Magic_81 __pyx_mstate_global->__pyx_kp_u_cdef_uint64_t_Magic_81
 #define __pyx_n_s_cline_in_traceback __pyx_mstate_global->__pyx_n_s_cline_in_traceback
 #define __pyx_n_s_create_start_position __pyx_mstate_global->__pyx_n_s_create_start_position
+#define __pyx_n_s_desc __pyx_mstate_global->__pyx_n_s_desc
 #define __pyx_n_s_end __pyx_mstate_global->__pyx_n_s_end
+#define __pyx_kp_u_entries __pyx_mstate_global->__pyx_kp_u_entries
+#define __pyx_n_s_enumerate __pyx_mstate_global->__pyx_n_s_enumerate
 #define __pyx_n_s_file __pyx_mstate_global->__pyx_n_s_file
+#define __pyx_n_s_find_magics __pyx_mstate_global->__pyx_n_s_find_magics
 #define __pyx_n_s_high __pyx_mstate_global->__pyx_n_s_high
 #define __pyx_kp_u_high_0x __pyx_mstate_global->__pyx_kp_u_high_0x
 #define __pyx_n_s_i __pyx_mstate_global->__pyx_n_s_i
+#define __pyx_n_u_i __pyx_mstate_global->__pyx_n_u_i
 #define __pyx_n_s_import __pyx_mstate_global->__pyx_n_s_import
+#define __pyx_n_s_initializing __pyx_mstate_global->__pyx_n_s_initializing
 #define __pyx_n_s_is_coroutine __pyx_mstate_global->__pyx_n_s_is_coroutine
 #define __pyx_n_s_low __pyx_mstate_global->__pyx_n_s_low
+#define __pyx_n_s_magic __pyx_mstate_global->__pyx_n_s_magic
+#define __pyx_n_u_magic __pyx_mstate_global->__pyx_n_u_magic
+#define __pyx_n_s_magics __pyx_mstate_global->__pyx_n_s_magics
 #define __pyx_n_s_main __pyx_mstate_global->__pyx_n_s_main
+#define __pyx_n_s_max __pyx_mstate_global->__pyx_n_s_max
+#define __pyx_n_s_min __pyx_mstate_global->__pyx_n_s_min
 #define __pyx_n_s_moves __pyx_mstate_global->__pyx_n_s_moves
 #define __pyx_n_s_name __pyx_mstate_global->__pyx_n_s_name
 #define __pyx_kp_u_no_piece_on_square __pyx_mstate_global->__pyx_kp_u_no_piece_on_square
@@ -2797,11 +3509,17 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_print_blocker_bits __pyx_mstate_global->__pyx_n_s_print_blocker_bits
 #define __pyx_n_s_print_blocker_masks __pyx_mstate_global->__pyx_n_s_print_blocker_masks
 #define __pyx_n_s_print_board __pyx_mstate_global->__pyx_n_s_print_board
+#define __pyx_n_s_py_build_bm_tables __pyx_mstate_global->__pyx_n_s_py_build_bm_tables
 #define __pyx_n_s_r __pyx_mstate_global->__pyx_n_s_r
+#define __pyx_n_s_randint __pyx_mstate_global->__pyx_n_s_randint
+#define __pyx_n_s_random __pyx_mstate_global->__pyx_n_s_random
 #define __pyx_n_s_range __pyx_mstate_global->__pyx_n_s_range
 #define __pyx_n_s_rank __pyx_mstate_global->__pyx_n_s_rank
+#define __pyx_n_s_spec __pyx_mstate_global->__pyx_n_s_spec
 #define __pyx_n_s_sq __pyx_mstate_global->__pyx_n_s_sq
 #define __pyx_n_s_square __pyx_mstate_global->__pyx_n_s_square
+#define __pyx_n_s_square_array __pyx_mstate_global->__pyx_n_s_square_array
+#define __pyx_n_s_squares __pyx_mstate_global->__pyx_n_s_squares
 #define __pyx_n_s_tables __pyx_mstate_global->__pyx_n_s_tables
 #define __pyx_n_s_tablut __pyx_mstate_global->__pyx_n_s_tablut
 #define __pyx_kp_s_tablut_pyx __pyx_mstate_global->__pyx_kp_s_tablut_pyx
@@ -2809,21 +3527,42 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_test_2 __pyx_mstate_global->__pyx_n_s_test_2
 #define __pyx_n_s_tmp __pyx_mstate_global->__pyx_n_s_tmp
 #define __pyx_n_s_tqdm __pyx_mstate_global->__pyx_n_s_tqdm
+#define __pyx_n_s_typing __pyx_mstate_global->__pyx_n_s_typing
+#define __pyx_n_s_unit __pyx_mstate_global->__pyx_n_s_unit
+#define __pyx_int_0 __pyx_mstate_global->__pyx_int_0
+#define __pyx_int_32 __pyx_mstate_global->__pyx_int_32
+#define __pyx_int_80 __pyx_mstate_global->__pyx_int_80
+#define __pyx_int_81 __pyx_mstate_global->__pyx_int_81
+#define __pyx_int_1000000000 __pyx_mstate_global->__pyx_int_1000000000
+#define __pyx_int_4294967295 __pyx_mstate_global->__pyx_int_4294967295
+#define __pyx_int_0xff00000000000000 __pyx_mstate_global->__pyx_int_0xff00000000000000
 #define __pyx_tuple_ __pyx_mstate_global->__pyx_tuple_
 #define __pyx_tuple__2 __pyx_mstate_global->__pyx_tuple__2
 #define __pyx_tuple__3 __pyx_mstate_global->__pyx_tuple__3
 #define __pyx_tuple__7 __pyx_mstate_global->__pyx_tuple__7
 #define __pyx_tuple__9 __pyx_mstate_global->__pyx_tuple__9
+#define __pyx_tuple__12 __pyx_mstate_global->__pyx_tuple__12
 #define __pyx_tuple__13 __pyx_mstate_global->__pyx_tuple__13
-#define __pyx_tuple__16 __pyx_mstate_global->__pyx_tuple__16
+#define __pyx_tuple__14 __pyx_mstate_global->__pyx_tuple__14
+#define __pyx_tuple__15 __pyx_mstate_global->__pyx_tuple__15
+#define __pyx_tuple__17 __pyx_mstate_global->__pyx_tuple__17
+#define __pyx_tuple__18 __pyx_mstate_global->__pyx_tuple__18
+#define __pyx_tuple__19 __pyx_mstate_global->__pyx_tuple__19
 #define __pyx_tuple__20 __pyx_mstate_global->__pyx_tuple__20
-#define __pyx_tuple__22 __pyx_mstate_global->__pyx_tuple__22
-#define __pyx_codeobj__15 __pyx_mstate_global->__pyx_codeobj__15
-#define __pyx_codeobj__17 __pyx_mstate_global->__pyx_codeobj__17
-#define __pyx_codeobj__18 __pyx_mstate_global->__pyx_codeobj__18
-#define __pyx_codeobj__19 __pyx_mstate_global->__pyx_codeobj__19
-#define __pyx_codeobj__21 __pyx_mstate_global->__pyx_codeobj__21
-#define __pyx_codeobj__23 __pyx_mstate_global->__pyx_codeobj__23
+#define __pyx_tuple__23 __pyx_mstate_global->__pyx_tuple__23
+#define __pyx_tuple__24 __pyx_mstate_global->__pyx_tuple__24
+#define __pyx_tuple__28 __pyx_mstate_global->__pyx_tuple__28
+#define __pyx_tuple__30 __pyx_mstate_global->__pyx_tuple__30
+#define __pyx_tuple__32 __pyx_mstate_global->__pyx_tuple__32
+#define __pyx_tuple__35 __pyx_mstate_global->__pyx_tuple__35
+#define __pyx_tuple__37 __pyx_mstate_global->__pyx_tuple__37
+#define __pyx_codeobj__27 __pyx_mstate_global->__pyx_codeobj__27
+#define __pyx_codeobj__29 __pyx_mstate_global->__pyx_codeobj__29
+#define __pyx_codeobj__31 __pyx_mstate_global->__pyx_codeobj__31
+#define __pyx_codeobj__33 __pyx_mstate_global->__pyx_codeobj__33
+#define __pyx_codeobj__34 __pyx_mstate_global->__pyx_codeobj__34
+#define __pyx_codeobj__36 __pyx_mstate_global->__pyx_codeobj__36
+#define __pyx_codeobj__38 __pyx_mstate_global->__pyx_codeobj__38
 /* #### Code section: module_code ### */
 
 /* "FromPyStructUtility":12
@@ -3115,21 +3854,955 @@ static struct __pyx_t_6tablut_Bitboard __pyx_convert__from_py_struct____pyx_t_6t
   return __pyx_r;
 }
 
-/* "tablut.pyx":109
+/* "cpython/complex.pxd":19
  * 
- * # Fast, inline access function
+ *         @property
+ *         cdef inline double real(self) noexcept:             # <<<<<<<<<<<<<<
+ *             return self.cval.real
+ * 
+ */
+
+static CYTHON_INLINE double __pyx_f_7cpython_7complex_7complex_4real_real(PyComplexObject *__pyx_v_self) {
+  double __pyx_r;
+
+  /* "cpython/complex.pxd":20
+ *         @property
+ *         cdef inline double real(self) noexcept:
+ *             return self.cval.real             # <<<<<<<<<<<<<<
+ * 
+ *         @property
+ */
+  __pyx_r = __pyx_v_self->cval.real;
+  goto __pyx_L0;
+
+  /* "cpython/complex.pxd":19
+ * 
+ *         @property
+ *         cdef inline double real(self) noexcept:             # <<<<<<<<<<<<<<
+ *             return self.cval.real
+ * 
+ */
+
+  /* function exit code */
+  __pyx_L0:;
+  return __pyx_r;
+}
+
+/* "cpython/complex.pxd":23
+ * 
+ *         @property
+ *         cdef inline double imag(self) noexcept:             # <<<<<<<<<<<<<<
+ *             return self.cval.imag
+ * 
+ */
+
+static CYTHON_INLINE double __pyx_f_7cpython_7complex_7complex_4imag_imag(PyComplexObject *__pyx_v_self) {
+  double __pyx_r;
+
+  /* "cpython/complex.pxd":24
+ *         @property
+ *         cdef inline double imag(self) noexcept:
+ *             return self.cval.imag             # <<<<<<<<<<<<<<
+ * 
+ *     # PyTypeObject PyComplex_Type
+ */
+  __pyx_r = __pyx_v_self->cval.imag;
+  goto __pyx_L0;
+
+  /* "cpython/complex.pxd":23
+ * 
+ *         @property
+ *         cdef inline double imag(self) noexcept:             # <<<<<<<<<<<<<<
+ *             return self.cval.imag
+ * 
+ */
+
+  /* function exit code */
+  __pyx_L0:;
+  return __pyx_r;
+}
+
+/* "cpython/contextvars.pxd":112
+ * 
+ * 
+ * cdef inline object get_value(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the default value of the context variable,
+ */
+
+static CYTHON_INLINE PyObject *__pyx_f_7cpython_11contextvars_get_value(PyObject *__pyx_v_var, struct __pyx_opt_args_7cpython_11contextvars_get_value *__pyx_optional_args) {
+  PyObject *__pyx_v_default_value = ((PyObject *)Py_None);
+  PyObject *__pyx_v_value;
+  PyObject *__pyx_v_pyvalue = NULL;
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  int __pyx_t_1;
+  int __pyx_t_2;
+  PyObject *__pyx_t_3 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("get_value", 1);
+  if (__pyx_optional_args) {
+    if (__pyx_optional_args->__pyx_n > 0) {
+      __pyx_v_default_value = __pyx_optional_args->default_value;
+    }
+  }
+
+  /* "cpython/contextvars.pxd":117
+ *     or None if no such value or default was found.
+ *     """
+ *     cdef PyObject *value = NULL             # <<<<<<<<<<<<<<
+ *     PyContextVar_Get(var, NULL, &value)
+ *     if value is NULL:
+ */
+  __pyx_v_value = NULL;
+
+  /* "cpython/contextvars.pxd":118
+ *     """
+ *     cdef PyObject *value = NULL
+ *     PyContextVar_Get(var, NULL, &value)             # <<<<<<<<<<<<<<
+ *     if value is NULL:
+ *         # context variable does not have a default
+ */
+  __pyx_t_1 = PyContextVar_Get(__pyx_v_var, NULL, (&__pyx_v_value)); if (unlikely(__pyx_t_1 == ((int)-1))) __PYX_ERR(2, 118, __pyx_L1_error)
+
+  /* "cpython/contextvars.pxd":119
+ *     cdef PyObject *value = NULL
+ *     PyContextVar_Get(var, NULL, &value)
+ *     if value is NULL:             # <<<<<<<<<<<<<<
+ *         # context variable does not have a default
+ *         pyvalue = default_value
+ */
+  __pyx_t_2 = (__pyx_v_value == NULL);
+  if (__pyx_t_2) {
+
+    /* "cpython/contextvars.pxd":121
+ *     if value is NULL:
+ *         # context variable does not have a default
+ *         pyvalue = default_value             # <<<<<<<<<<<<<<
+ *     else:
+ *         # value or default value of context variable
+ */
+    __Pyx_INCREF(__pyx_v_default_value);
+    __pyx_v_pyvalue = __pyx_v_default_value;
+
+    /* "cpython/contextvars.pxd":119
+ *     cdef PyObject *value = NULL
+ *     PyContextVar_Get(var, NULL, &value)
+ *     if value is NULL:             # <<<<<<<<<<<<<<
+ *         # context variable does not have a default
+ *         pyvalue = default_value
+ */
+    goto __pyx_L3;
+  }
+
+  /* "cpython/contextvars.pxd":124
+ *     else:
+ *         # value or default value of context variable
+ *         pyvalue = <object>value             # <<<<<<<<<<<<<<
+ *         Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'
+ *     return pyvalue
+ */
+  /*else*/ {
+    __pyx_t_3 = ((PyObject *)__pyx_v_value);
+    __Pyx_INCREF(__pyx_t_3);
+    __pyx_v_pyvalue = __pyx_t_3;
+    __pyx_t_3 = 0;
+
+    /* "cpython/contextvars.pxd":125
+ *         # value or default value of context variable
+ *         pyvalue = <object>value
+ *         Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'             # <<<<<<<<<<<<<<
+ *     return pyvalue
+ * 
+ */
+    Py_XDECREF(__pyx_v_value);
+  }
+  __pyx_L3:;
+
+  /* "cpython/contextvars.pxd":126
+ *         pyvalue = <object>value
+ *         Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'
+ *     return pyvalue             # <<<<<<<<<<<<<<
+ * 
+ * 
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __Pyx_INCREF(__pyx_v_pyvalue);
+  __pyx_r = __pyx_v_pyvalue;
+  goto __pyx_L0;
+
+  /* "cpython/contextvars.pxd":112
+ * 
+ * 
+ * cdef inline object get_value(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the default value of the context variable,
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_AddTraceback("cpython.contextvars.get_value", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XDECREF(__pyx_v_pyvalue);
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "cpython/contextvars.pxd":129
+ * 
+ * 
+ * cdef inline object get_value_no_default(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the provided default value if no such value was found.
+ */
+
+static CYTHON_INLINE PyObject *__pyx_f_7cpython_11contextvars_get_value_no_default(PyObject *__pyx_v_var, struct __pyx_opt_args_7cpython_11contextvars_get_value_no_default *__pyx_optional_args) {
+  PyObject *__pyx_v_default_value = ((PyObject *)Py_None);
+  PyObject *__pyx_v_value;
+  PyObject *__pyx_v_pyvalue = NULL;
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  int __pyx_t_1;
+  PyObject *__pyx_t_2 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("get_value_no_default", 1);
+  if (__pyx_optional_args) {
+    if (__pyx_optional_args->__pyx_n > 0) {
+      __pyx_v_default_value = __pyx_optional_args->default_value;
+    }
+  }
+
+  /* "cpython/contextvars.pxd":135
+ *     Ignores the default value of the context variable, if any.
+ *     """
+ *     cdef PyObject *value = NULL             # <<<<<<<<<<<<<<
+ *     PyContextVar_Get(var, <PyObject*>default_value, &value)
+ *     # value of context variable or 'default_value'
+ */
+  __pyx_v_value = NULL;
+
+  /* "cpython/contextvars.pxd":136
+ *     """
+ *     cdef PyObject *value = NULL
+ *     PyContextVar_Get(var, <PyObject*>default_value, &value)             # <<<<<<<<<<<<<<
+ *     # value of context variable or 'default_value'
+ *     pyvalue = <object>value
+ */
+  __pyx_t_1 = PyContextVar_Get(__pyx_v_var, ((PyObject *)__pyx_v_default_value), (&__pyx_v_value)); if (unlikely(__pyx_t_1 == ((int)-1))) __PYX_ERR(2, 136, __pyx_L1_error)
+
+  /* "cpython/contextvars.pxd":138
+ *     PyContextVar_Get(var, <PyObject*>default_value, &value)
+ *     # value of context variable or 'default_value'
+ *     pyvalue = <object>value             # <<<<<<<<<<<<<<
+ *     Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'
+ *     return pyvalue
+ */
+  __pyx_t_2 = ((PyObject *)__pyx_v_value);
+  __Pyx_INCREF(__pyx_t_2);
+  __pyx_v_pyvalue = __pyx_t_2;
+  __pyx_t_2 = 0;
+
+  /* "cpython/contextvars.pxd":139
+ *     # value of context variable or 'default_value'
+ *     pyvalue = <object>value
+ *     Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'             # <<<<<<<<<<<<<<
+ *     return pyvalue
+ */
+  Py_XDECREF(__pyx_v_value);
+
+  /* "cpython/contextvars.pxd":140
+ *     pyvalue = <object>value
+ *     Py_XDECREF(value)  # PyContextVar_Get() returned an owned reference as 'PyObject*'
+ *     return pyvalue             # <<<<<<<<<<<<<<
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __Pyx_INCREF(__pyx_v_pyvalue);
+  __pyx_r = __pyx_v_pyvalue;
+  goto __pyx_L0;
+
+  /* "cpython/contextvars.pxd":129
+ * 
+ * 
+ * cdef inline object get_value_no_default(var, default_value=None):             # <<<<<<<<<<<<<<
+ *     """Return a new reference to the value of the context variable,
+ *     or the provided default value if no such value was found.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_AddTraceback("cpython.contextvars.get_value_no_default", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XDECREF(__pyx_v_pyvalue);
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "array.pxd":104
+ *             __data_union data
+ * 
+ *         def __getbuffer__(self, Py_buffer* info, int flags):             # <<<<<<<<<<<<<<
+ *             # This implementation of getbuffer is geared towards Cython
+ *             # requirements, and does not yet fulfill the PEP.
+ */
+
+/* Python wrapper */
+CYTHON_UNUSED static int __pyx_pw_7cpython_5array_5array_1__getbuffer__(PyObject *__pyx_v_self, Py_buffer *__pyx_v_info, int __pyx_v_flags); /*proto*/
+CYTHON_UNUSED static int __pyx_pw_7cpython_5array_5array_1__getbuffer__(PyObject *__pyx_v_self, Py_buffer *__pyx_v_info, int __pyx_v_flags) {
+  CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
+  int __pyx_r;
+  __Pyx_RefNannyDeclarations
+  __Pyx_RefNannySetupContext("__getbuffer__ (wrapper)", 0);
+  __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
+  __pyx_r = __pyx_pf_7cpython_5array_5array___getbuffer__(((arrayobject *)__pyx_v_self), ((Py_buffer *)__pyx_v_info), ((int)__pyx_v_flags));
+
+  /* function exit code */
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+static int __pyx_pf_7cpython_5array_5array___getbuffer__(arrayobject *__pyx_v_self, Py_buffer *__pyx_v_info, CYTHON_UNUSED int __pyx_v_flags) {
+  PyObject *__pyx_v_item_count = NULL;
+  int __pyx_r;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  char *__pyx_t_2;
+  int __pyx_t_3;
+  PyObject *__pyx_t_4 = NULL;
+  Py_ssize_t __pyx_t_5;
+  int __pyx_t_6;
+  char __pyx_t_7;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  if (unlikely(__pyx_v_info == NULL)) {
+    PyErr_SetString(PyExc_BufferError, "PyObject_GetBuffer: view==NULL argument is obsolete");
+    return -1;
+  }
+  __Pyx_RefNannySetupContext("__getbuffer__", 0);
+  __pyx_v_info->obj = Py_None; __Pyx_INCREF(Py_None);
+  __Pyx_GIVEREF(__pyx_v_info->obj);
+
+  /* "array.pxd":109
+ *             # In particular strided access is always provided regardless
+ *             # of flags
+ *             item_count = Py_SIZE(self)             # <<<<<<<<<<<<<<
+ * 
+ *             info.suboffsets = NULL
+ */
+  __pyx_t_1 = PyInt_FromSsize_t(Py_SIZE(((PyObject *)__pyx_v_self))); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 109, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_v_item_count = __pyx_t_1;
+  __pyx_t_1 = 0;
+
+  /* "array.pxd":111
+ *             item_count = Py_SIZE(self)
+ * 
+ *             info.suboffsets = NULL             # <<<<<<<<<<<<<<
+ *             info.buf = self.data.as_chars
+ *             info.readonly = 0
+ */
+  __pyx_v_info->suboffsets = NULL;
+
+  /* "array.pxd":112
+ * 
+ *             info.suboffsets = NULL
+ *             info.buf = self.data.as_chars             # <<<<<<<<<<<<<<
+ *             info.readonly = 0
+ *             info.ndim = 1
+ */
+  __pyx_t_2 = __pyx_v_self->data.as_chars;
+  __pyx_v_info->buf = __pyx_t_2;
+
+  /* "array.pxd":113
+ *             info.suboffsets = NULL
+ *             info.buf = self.data.as_chars
+ *             info.readonly = 0             # <<<<<<<<<<<<<<
+ *             info.ndim = 1
+ *             info.itemsize = self.ob_descr.itemsize   # e.g. sizeof(float)
+ */
+  __pyx_v_info->readonly = 0;
+
+  /* "array.pxd":114
+ *             info.buf = self.data.as_chars
+ *             info.readonly = 0
+ *             info.ndim = 1             # <<<<<<<<<<<<<<
+ *             info.itemsize = self.ob_descr.itemsize   # e.g. sizeof(float)
+ *             info.len = info.itemsize * item_count
+ */
+  __pyx_v_info->ndim = 1;
+
+  /* "array.pxd":115
+ *             info.readonly = 0
+ *             info.ndim = 1
+ *             info.itemsize = self.ob_descr.itemsize   # e.g. sizeof(float)             # <<<<<<<<<<<<<<
+ *             info.len = info.itemsize * item_count
+ * 
+ */
+  __pyx_t_3 = __pyx_v_self->ob_descr->itemsize;
+  __pyx_v_info->itemsize = __pyx_t_3;
+
+  /* "array.pxd":116
+ *             info.ndim = 1
+ *             info.itemsize = self.ob_descr.itemsize   # e.g. sizeof(float)
+ *             info.len = info.itemsize * item_count             # <<<<<<<<<<<<<<
+ * 
+ *             info.shape = <Py_ssize_t*> PyObject_Malloc(sizeof(Py_ssize_t) + 2)
+ */
+  __pyx_t_1 = PyInt_FromSsize_t(__pyx_v_info->itemsize); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 116, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_4 = PyNumber_Multiply(__pyx_t_1, __pyx_v_item_count); if (unlikely(!__pyx_t_4)) __PYX_ERR(3, 116, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_5 = __Pyx_PyIndex_AsSsize_t(__pyx_t_4); if (unlikely((__pyx_t_5 == (Py_ssize_t)-1) && PyErr_Occurred())) __PYX_ERR(3, 116, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __pyx_v_info->len = __pyx_t_5;
+
+  /* "array.pxd":118
+ *             info.len = info.itemsize * item_count
+ * 
+ *             info.shape = <Py_ssize_t*> PyObject_Malloc(sizeof(Py_ssize_t) + 2)             # <<<<<<<<<<<<<<
+ *             if not info.shape:
+ *                 raise MemoryError()
+ */
+  __pyx_v_info->shape = ((Py_ssize_t *)PyObject_Malloc(((sizeof(Py_ssize_t)) + 2)));
+
+  /* "array.pxd":119
+ * 
+ *             info.shape = <Py_ssize_t*> PyObject_Malloc(sizeof(Py_ssize_t) + 2)
+ *             if not info.shape:             # <<<<<<<<<<<<<<
+ *                 raise MemoryError()
+ *             info.shape[0] = item_count      # constant regardless of resizing
+ */
+  __pyx_t_6 = (!(__pyx_v_info->shape != 0));
+  if (unlikely(__pyx_t_6)) {
+
+    /* "array.pxd":120
+ *             info.shape = <Py_ssize_t*> PyObject_Malloc(sizeof(Py_ssize_t) + 2)
+ *             if not info.shape:
+ *                 raise MemoryError()             # <<<<<<<<<<<<<<
+ *             info.shape[0] = item_count      # constant regardless of resizing
+ *             info.strides = &info.itemsize
+ */
+    PyErr_NoMemory(); __PYX_ERR(3, 120, __pyx_L1_error)
+
+    /* "array.pxd":119
+ * 
+ *             info.shape = <Py_ssize_t*> PyObject_Malloc(sizeof(Py_ssize_t) + 2)
+ *             if not info.shape:             # <<<<<<<<<<<<<<
+ *                 raise MemoryError()
+ *             info.shape[0] = item_count      # constant regardless of resizing
+ */
+  }
+
+  /* "array.pxd":121
+ *             if not info.shape:
+ *                 raise MemoryError()
+ *             info.shape[0] = item_count      # constant regardless of resizing             # <<<<<<<<<<<<<<
+ *             info.strides = &info.itemsize
+ * 
+ */
+  __pyx_t_5 = __Pyx_PyIndex_AsSsize_t(__pyx_v_item_count); if (unlikely((__pyx_t_5 == (Py_ssize_t)-1) && PyErr_Occurred())) __PYX_ERR(3, 121, __pyx_L1_error)
+  (__pyx_v_info->shape[0]) = __pyx_t_5;
+
+  /* "array.pxd":122
+ *                 raise MemoryError()
+ *             info.shape[0] = item_count      # constant regardless of resizing
+ *             info.strides = &info.itemsize             # <<<<<<<<<<<<<<
+ * 
+ *             info.format = <char*> (info.shape + 1)
+ */
+  __pyx_v_info->strides = (&__pyx_v_info->itemsize);
+
+  /* "array.pxd":124
+ *             info.strides = &info.itemsize
+ * 
+ *             info.format = <char*> (info.shape + 1)             # <<<<<<<<<<<<<<
+ *             info.format[0] = self.ob_descr.typecode
+ *             info.format[1] = 0
+ */
+  __pyx_v_info->format = ((char *)(__pyx_v_info->shape + 1));
+
+  /* "array.pxd":125
+ * 
+ *             info.format = <char*> (info.shape + 1)
+ *             info.format[0] = self.ob_descr.typecode             # <<<<<<<<<<<<<<
+ *             info.format[1] = 0
+ *             info.obj = self
+ */
+  __pyx_t_7 = __pyx_v_self->ob_descr->typecode;
+  (__pyx_v_info->format[0]) = __pyx_t_7;
+
+  /* "array.pxd":126
+ *             info.format = <char*> (info.shape + 1)
+ *             info.format[0] = self.ob_descr.typecode
+ *             info.format[1] = 0             # <<<<<<<<<<<<<<
+ *             info.obj = self
+ * 
+ */
+  (__pyx_v_info->format[1]) = 0;
+
+  /* "array.pxd":127
+ *             info.format[0] = self.ob_descr.typecode
+ *             info.format[1] = 0
+ *             info.obj = self             # <<<<<<<<<<<<<<
+ * 
+ *         def __releasebuffer__(self, Py_buffer* info):
+ */
+  __Pyx_INCREF((PyObject *)__pyx_v_self);
+  __Pyx_GIVEREF((PyObject *)__pyx_v_self);
+  __Pyx_GOTREF(__pyx_v_info->obj);
+  __Pyx_DECREF(__pyx_v_info->obj);
+  __pyx_v_info->obj = ((PyObject *)__pyx_v_self);
+
+  /* "array.pxd":104
+ *             __data_union data
+ * 
+ *         def __getbuffer__(self, Py_buffer* info, int flags):             # <<<<<<<<<<<<<<
+ *             # This implementation of getbuffer is geared towards Cython
+ *             # requirements, and does not yet fulfill the PEP.
+ */
+
+  /* function exit code */
+  __pyx_r = 0;
+  goto __pyx_L0;
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_AddTraceback("cpython.array.array.__getbuffer__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
+  if (__pyx_v_info->obj != NULL) {
+    __Pyx_GOTREF(__pyx_v_info->obj);
+    __Pyx_DECREF(__pyx_v_info->obj); __pyx_v_info->obj = 0;
+  }
+  goto __pyx_L2;
+  __pyx_L0:;
+  if (__pyx_v_info->obj == Py_None) {
+    __Pyx_GOTREF(__pyx_v_info->obj);
+    __Pyx_DECREF(__pyx_v_info->obj); __pyx_v_info->obj = 0;
+  }
+  __pyx_L2:;
+  __Pyx_XDECREF(__pyx_v_item_count);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "array.pxd":129
+ *             info.obj = self
+ * 
+ *         def __releasebuffer__(self, Py_buffer* info):             # <<<<<<<<<<<<<<
+ *             PyObject_Free(info.shape)
+ * 
+ */
+
+/* Python wrapper */
+CYTHON_UNUSED static void __pyx_pw_7cpython_5array_5array_3__releasebuffer__(PyObject *__pyx_v_self, Py_buffer *__pyx_v_info); /*proto*/
+CYTHON_UNUSED static void __pyx_pw_7cpython_5array_5array_3__releasebuffer__(PyObject *__pyx_v_self, Py_buffer *__pyx_v_info) {
+  CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
+  __Pyx_RefNannyDeclarations
+  __Pyx_RefNannySetupContext("__releasebuffer__ (wrapper)", 0);
+  __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
+  __pyx_pf_7cpython_5array_5array_2__releasebuffer__(((arrayobject *)__pyx_v_self), ((Py_buffer *)__pyx_v_info));
+
+  /* function exit code */
+  __Pyx_RefNannyFinishContext();
+}
+
+static void __pyx_pf_7cpython_5array_5array_2__releasebuffer__(CYTHON_UNUSED arrayobject *__pyx_v_self, Py_buffer *__pyx_v_info) {
+
+  /* "array.pxd":130
+ * 
+ *         def __releasebuffer__(self, Py_buffer* info):
+ *             PyObject_Free(info.shape)             # <<<<<<<<<<<<<<
+ * 
+ *     array newarrayobject(PyTypeObject* type, Py_ssize_t size, arraydescr *descr)
+ */
+  PyObject_Free(__pyx_v_info->shape);
+
+  /* "array.pxd":129
+ *             info.obj = self
+ * 
+ *         def __releasebuffer__(self, Py_buffer* info):             # <<<<<<<<<<<<<<
+ *             PyObject_Free(info.shape)
+ * 
+ */
+
+  /* function exit code */
+}
+
+/* "array.pxd":141
+ * 
+ * 
+ * cdef inline array clone(array template, Py_ssize_t length, bint zero):             # <<<<<<<<<<<<<<
+ *     """ fast creation of a new array, given a template array.
+ *     type will be same as template.
+ */
+
+static CYTHON_INLINE arrayobject *__pyx_f_7cpython_5array_clone(arrayobject *__pyx_v_template, Py_ssize_t __pyx_v_length, int __pyx_v_zero) {
+  arrayobject *__pyx_v_op = 0;
+  arrayobject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  int __pyx_t_2;
+  int __pyx_t_3;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("clone", 1);
+
+  /* "array.pxd":145
+ *     type will be same as template.
+ *     if zero is true, new array will be initialized with zeroes."""
+ *     cdef array op = newarrayobject(Py_TYPE(template), length, template.ob_descr)             # <<<<<<<<<<<<<<
+ *     if zero and op is not None:
+ *         memset(op.data.as_chars, 0, length * op.ob_descr.itemsize)
+ */
+  __pyx_t_1 = ((PyObject *)newarrayobject(Py_TYPE(((PyObject *)__pyx_v_template)), __pyx_v_length, __pyx_v_template->ob_descr)); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 145, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_v_op = ((arrayobject *)__pyx_t_1);
+  __pyx_t_1 = 0;
+
+  /* "array.pxd":146
+ *     if zero is true, new array will be initialized with zeroes."""
+ *     cdef array op = newarrayobject(Py_TYPE(template), length, template.ob_descr)
+ *     if zero and op is not None:             # <<<<<<<<<<<<<<
+ *         memset(op.data.as_chars, 0, length * op.ob_descr.itemsize)
+ *     return op
+ */
+  if (__pyx_v_zero) {
+  } else {
+    __pyx_t_2 = __pyx_v_zero;
+    goto __pyx_L4_bool_binop_done;
+  }
+  __pyx_t_3 = (((PyObject *)__pyx_v_op) != Py_None);
+  __pyx_t_2 = __pyx_t_3;
+  __pyx_L4_bool_binop_done:;
+  if (__pyx_t_2) {
+
+    /* "array.pxd":147
+ *     cdef array op = newarrayobject(Py_TYPE(template), length, template.ob_descr)
+ *     if zero and op is not None:
+ *         memset(op.data.as_chars, 0, length * op.ob_descr.itemsize)             # <<<<<<<<<<<<<<
+ *     return op
+ * 
+ */
+    (void)(memset(__pyx_v_op->data.as_chars, 0, (__pyx_v_length * __pyx_v_op->ob_descr->itemsize)));
+
+    /* "array.pxd":146
+ *     if zero is true, new array will be initialized with zeroes."""
+ *     cdef array op = newarrayobject(Py_TYPE(template), length, template.ob_descr)
+ *     if zero and op is not None:             # <<<<<<<<<<<<<<
+ *         memset(op.data.as_chars, 0, length * op.ob_descr.itemsize)
+ *     return op
+ */
+  }
+
+  /* "array.pxd":148
+ *     if zero and op is not None:
+ *         memset(op.data.as_chars, 0, length * op.ob_descr.itemsize)
+ *     return op             # <<<<<<<<<<<<<<
+ * 
+ * cdef inline array copy(array self):
+ */
+  __Pyx_XDECREF((PyObject *)__pyx_r);
+  __Pyx_INCREF((PyObject *)__pyx_v_op);
+  __pyx_r = __pyx_v_op;
+  goto __pyx_L0;
+
+  /* "array.pxd":141
+ * 
+ * 
+ * cdef inline array clone(array template, Py_ssize_t length, bint zero):             # <<<<<<<<<<<<<<
+ *     """ fast creation of a new array, given a template array.
+ *     type will be same as template.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_AddTraceback("cpython.array.clone", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XDECREF((PyObject *)__pyx_v_op);
+  __Pyx_XGIVEREF((PyObject *)__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "array.pxd":150
+ *     return op
+ * 
+ * cdef inline array copy(array self):             # <<<<<<<<<<<<<<
+ *     """ make a copy of an array. """
+ *     cdef array op = newarrayobject(Py_TYPE(self), Py_SIZE(self), self.ob_descr)
+ */
+
+static CYTHON_INLINE arrayobject *__pyx_f_7cpython_5array_copy(arrayobject *__pyx_v_self) {
+  arrayobject *__pyx_v_op = 0;
+  arrayobject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("copy", 1);
+
+  /* "array.pxd":152
+ * cdef inline array copy(array self):
+ *     """ make a copy of an array. """
+ *     cdef array op = newarrayobject(Py_TYPE(self), Py_SIZE(self), self.ob_descr)             # <<<<<<<<<<<<<<
+ *     memcpy(op.data.as_chars, self.data.as_chars, Py_SIZE(op) * op.ob_descr.itemsize)
+ *     return op
+ */
+  __pyx_t_1 = ((PyObject *)newarrayobject(Py_TYPE(((PyObject *)__pyx_v_self)), Py_SIZE(((PyObject *)__pyx_v_self)), __pyx_v_self->ob_descr)); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 152, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_v_op = ((arrayobject *)__pyx_t_1);
+  __pyx_t_1 = 0;
+
+  /* "array.pxd":153
+ *     """ make a copy of an array. """
+ *     cdef array op = newarrayobject(Py_TYPE(self), Py_SIZE(self), self.ob_descr)
+ *     memcpy(op.data.as_chars, self.data.as_chars, Py_SIZE(op) * op.ob_descr.itemsize)             # <<<<<<<<<<<<<<
+ *     return op
+ * 
+ */
+  (void)(memcpy(__pyx_v_op->data.as_chars, __pyx_v_self->data.as_chars, (Py_SIZE(((PyObject *)__pyx_v_op)) * __pyx_v_op->ob_descr->itemsize)));
+
+  /* "array.pxd":154
+ *     cdef array op = newarrayobject(Py_TYPE(self), Py_SIZE(self), self.ob_descr)
+ *     memcpy(op.data.as_chars, self.data.as_chars, Py_SIZE(op) * op.ob_descr.itemsize)
+ *     return op             # <<<<<<<<<<<<<<
+ * 
+ * cdef inline int extend_buffer(array self, char* stuff, Py_ssize_t n) except -1:
+ */
+  __Pyx_XDECREF((PyObject *)__pyx_r);
+  __Pyx_INCREF((PyObject *)__pyx_v_op);
+  __pyx_r = __pyx_v_op;
+  goto __pyx_L0;
+
+  /* "array.pxd":150
+ *     return op
+ * 
+ * cdef inline array copy(array self):             # <<<<<<<<<<<<<<
+ *     """ make a copy of an array. """
+ *     cdef array op = newarrayobject(Py_TYPE(self), Py_SIZE(self), self.ob_descr)
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_AddTraceback("cpython.array.copy", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XDECREF((PyObject *)__pyx_v_op);
+  __Pyx_XGIVEREF((PyObject *)__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "array.pxd":156
+ *     return op
+ * 
+ * cdef inline int extend_buffer(array self, char* stuff, Py_ssize_t n) except -1:             # <<<<<<<<<<<<<<
+ *     """ efficient appending of new stuff of same type
+ *     (e.g. of same array type)
+ */
+
+static CYTHON_INLINE int __pyx_f_7cpython_5array_extend_buffer(arrayobject *__pyx_v_self, char *__pyx_v_stuff, Py_ssize_t __pyx_v_n) {
+  Py_ssize_t __pyx_v_itemsize;
+  Py_ssize_t __pyx_v_origsize;
+  int __pyx_r;
+  int __pyx_t_1;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+
+  /* "array.pxd":160
+ *     (e.g. of same array type)
+ *     n: number of elements (not number of bytes!) """
+ *     cdef Py_ssize_t itemsize = self.ob_descr.itemsize             # <<<<<<<<<<<<<<
+ *     cdef Py_ssize_t origsize = Py_SIZE(self)
+ *     resize_smart(self, origsize + n)
+ */
+  __pyx_t_1 = __pyx_v_self->ob_descr->itemsize;
+  __pyx_v_itemsize = __pyx_t_1;
+
+  /* "array.pxd":161
+ *     n: number of elements (not number of bytes!) """
+ *     cdef Py_ssize_t itemsize = self.ob_descr.itemsize
+ *     cdef Py_ssize_t origsize = Py_SIZE(self)             # <<<<<<<<<<<<<<
+ *     resize_smart(self, origsize + n)
+ *     memcpy(self.data.as_chars + origsize * itemsize, stuff, n * itemsize)
+ */
+  __pyx_v_origsize = Py_SIZE(((PyObject *)__pyx_v_self));
+
+  /* "array.pxd":162
+ *     cdef Py_ssize_t itemsize = self.ob_descr.itemsize
+ *     cdef Py_ssize_t origsize = Py_SIZE(self)
+ *     resize_smart(self, origsize + n)             # <<<<<<<<<<<<<<
+ *     memcpy(self.data.as_chars + origsize * itemsize, stuff, n * itemsize)
+ *     return 0
+ */
+  __pyx_t_1 = resize_smart(__pyx_v_self, (__pyx_v_origsize + __pyx_v_n)); if (unlikely(__pyx_t_1 == ((int)-1))) __PYX_ERR(3, 162, __pyx_L1_error)
+
+  /* "array.pxd":163
+ *     cdef Py_ssize_t origsize = Py_SIZE(self)
+ *     resize_smart(self, origsize + n)
+ *     memcpy(self.data.as_chars + origsize * itemsize, stuff, n * itemsize)             # <<<<<<<<<<<<<<
+ *     return 0
+ * 
+ */
+  (void)(memcpy((__pyx_v_self->data.as_chars + (__pyx_v_origsize * __pyx_v_itemsize)), __pyx_v_stuff, (__pyx_v_n * __pyx_v_itemsize)));
+
+  /* "array.pxd":164
+ *     resize_smart(self, origsize + n)
+ *     memcpy(self.data.as_chars + origsize * itemsize, stuff, n * itemsize)
+ *     return 0             # <<<<<<<<<<<<<<
+ * 
+ * cdef inline int extend(array self, array other) except -1:
+ */
+  __pyx_r = 0;
+  goto __pyx_L0;
+
+  /* "array.pxd":156
+ *     return op
+ * 
+ * cdef inline int extend_buffer(array self, char* stuff, Py_ssize_t n) except -1:             # <<<<<<<<<<<<<<
+ *     """ efficient appending of new stuff of same type
+ *     (e.g. of same array type)
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_AddTraceback("cpython.array.extend_buffer", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
+  __pyx_L0:;
+  return __pyx_r;
+}
+
+/* "array.pxd":166
+ *     return 0
+ * 
+ * cdef inline int extend(array self, array other) except -1:             # <<<<<<<<<<<<<<
+ *     """ extend array with data from another array; types must match. """
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:
+ */
+
+static CYTHON_INLINE int __pyx_f_7cpython_5array_extend(arrayobject *__pyx_v_self, arrayobject *__pyx_v_other) {
+  int __pyx_r;
+  int __pyx_t_1;
+  int __pyx_t_2;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+
+  /* "array.pxd":168
+ * cdef inline int extend(array self, array other) except -1:
+ *     """ extend array with data from another array; types must match. """
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:             # <<<<<<<<<<<<<<
+ *         PyErr_BadArgument()
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))
+ */
+  __pyx_t_1 = (__pyx_v_self->ob_descr->typecode != __pyx_v_other->ob_descr->typecode);
+  if (__pyx_t_1) {
+
+    /* "array.pxd":169
+ *     """ extend array with data from another array; types must match. """
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:
+ *         PyErr_BadArgument()             # <<<<<<<<<<<<<<
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))
+ * 
+ */
+    __pyx_t_2 = PyErr_BadArgument(); if (unlikely(__pyx_t_2 == ((int)0))) __PYX_ERR(3, 169, __pyx_L1_error)
+
+    /* "array.pxd":168
+ * cdef inline int extend(array self, array other) except -1:
+ *     """ extend array with data from another array; types must match. """
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:             # <<<<<<<<<<<<<<
+ *         PyErr_BadArgument()
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))
+ */
+  }
+
+  /* "array.pxd":170
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:
+ *         PyErr_BadArgument()
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))             # <<<<<<<<<<<<<<
+ * 
+ * cdef inline void zero(array self) noexcept:
+ */
+  __pyx_t_2 = __pyx_f_7cpython_5array_extend_buffer(__pyx_v_self, __pyx_v_other->data.as_chars, Py_SIZE(((PyObject *)__pyx_v_other))); if (unlikely(__pyx_t_2 == ((int)-1))) __PYX_ERR(3, 170, __pyx_L1_error)
+  __pyx_r = __pyx_t_2;
+  goto __pyx_L0;
+
+  /* "array.pxd":166
+ *     return 0
+ * 
+ * cdef inline int extend(array self, array other) except -1:             # <<<<<<<<<<<<<<
+ *     """ extend array with data from another array; types must match. """
+ *     if self.ob_descr.typecode != other.ob_descr.typecode:
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_AddTraceback("cpython.array.extend", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
+  __pyx_L0:;
+  return __pyx_r;
+}
+
+/* "array.pxd":172
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))
+ * 
+ * cdef inline void zero(array self) noexcept:             # <<<<<<<<<<<<<<
+ *     """ set all elements of array to zero. """
+ *     memset(self.data.as_chars, 0, Py_SIZE(self) * self.ob_descr.itemsize)
+ */
+
+static CYTHON_INLINE void __pyx_f_7cpython_5array_zero(arrayobject *__pyx_v_self) {
+
+  /* "array.pxd":174
+ * cdef inline void zero(array self) noexcept:
+ *     """ set all elements of array to zero. """
+ *     memset(self.data.as_chars, 0, Py_SIZE(self) * self.ob_descr.itemsize)             # <<<<<<<<<<<<<<
+ */
+  (void)(memset(__pyx_v_self->data.as_chars, 0, (Py_SIZE(((PyObject *)__pyx_v_self)) * __pyx_v_self->ob_descr->itemsize)));
+
+  /* "array.pxd":172
+ *     return extend_buffer(self, other.data.as_chars, Py_SIZE(other))
+ * 
+ * cdef inline void zero(array self) noexcept:             # <<<<<<<<<<<<<<
+ *     """ set all elements of array to zero. """
+ *     memset(self.data.as_chars, 0, Py_SIZE(self) * self.ob_descr.itemsize)
+ */
+
+  /* function exit code */
+}
+
+/* "tablut.pyx":116
+ *     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]
+ * 
  * cdef inline Bitboard get_blocker_mask(int index):             # <<<<<<<<<<<<<<
- *     return Bitboard(BLOCKER_MASK[index].low, BLOCKER_MASK[index].high)
- * 
+ *     """
+ *     Returns relevant blocker mask for a given square.
  */
 
 static CYTHON_INLINE struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_get_blocker_mask(int __pyx_v_index) {
   struct __pyx_t_6tablut_Bitboard __pyx_r;
   struct __pyx_t_6tablut_Bitboard __pyx_t_1;
 
-  /* "tablut.pyx":110
- * # Fast, inline access function
- * cdef inline Bitboard get_blocker_mask(int index):
+  /* "tablut.pyx":120
+ *     Returns relevant blocker mask for a given square.
+ *     """
  *     return Bitboard(BLOCKER_MASK[index].low, BLOCKER_MASK[index].high)             # <<<<<<<<<<<<<<
  * 
  * cdef int[81] BLOCKER_BITS = [
@@ -3139,12 +4812,12 @@ static CYTHON_INLINE struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_get_blocker
   __pyx_r = __pyx_t_1;
   goto __pyx_L0;
 
-  /* "tablut.pyx":109
+  /* "tablut.pyx":116
+ *     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]
  * 
- * # Fast, inline access function
  * cdef inline Bitboard get_blocker_mask(int index):             # <<<<<<<<<<<<<<
- *     return Bitboard(BLOCKER_MASK[index].low, BLOCKER_MASK[index].high)
- * 
+ *     """
+ *     Returns relevant blocker mask for a given square.
  */
 
   /* function exit code */
@@ -3152,7 +4825,7 @@ static CYTHON_INLINE struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_get_blocker
   return __pyx_r;
 }
 
-/* "tablut.pyx":126
+/* "tablut.pyx":136
  * # Bit Manipulation Macros
  * #------------------------------------------------------------------------------
  * cdef void set_bit(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3169,7 +4842,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("set_bit", 1);
 
-  /* "tablut.pyx":127
+  /* "tablut.pyx":137
  * #------------------------------------------------------------------------------
  * cdef void set_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3182,7 +4855,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
   }
   if (__pyx_t_1) {
 
-    /* "tablut.pyx":128
+    /* "tablut.pyx":138
  * cdef void set_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:
  *         board.low |= (<uint64_t>1) << index             # <<<<<<<<<<<<<<
@@ -3191,7 +4864,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
  */
     __pyx_v_board->low = (__pyx_v_board->low | (((uint64_t)1) << __pyx_v_index));
 
-    /* "tablut.pyx":127
+    /* "tablut.pyx":137
  * #------------------------------------------------------------------------------
  * cdef void set_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3201,7 +4874,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
     goto __pyx_L3;
   }
 
-  /* "tablut.pyx":129
+  /* "tablut.pyx":139
  *     if 0 <= index < 63:
  *         board.low |= (<uint64_t>1) << index
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3214,7 +4887,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
   }
   if (likely(__pyx_t_1)) {
 
-    /* "tablut.pyx":130
+    /* "tablut.pyx":140
  *         board.low |= (<uint64_t>1) << index
  *     elif 63 <= index < 81:
  *         board.high |= (<uint64_t>1) << (index - 63)             # <<<<<<<<<<<<<<
@@ -3223,7 +4896,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
  */
     __pyx_v_board->high = (__pyx_v_board->high | (((uint64_t)1) << (__pyx_v_index - 63)));
 
-    /* "tablut.pyx":129
+    /* "tablut.pyx":139
  *     if 0 <= index < 63:
  *         board.low |= (<uint64_t>1) << index
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3233,7 +4906,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
     goto __pyx_L3;
   }
 
-  /* "tablut.pyx":132
+  /* "tablut.pyx":142
  *         board.high |= (<uint64_t>1) << (index - 63)
  *     else:
  *         raise ValueError("Bit index must be between 0 and 80")             # <<<<<<<<<<<<<<
@@ -3241,15 +4914,15 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
  * cdef bint is_bit_set(Bitboard* board, int index):
  */
   /*else*/ {
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 132, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 142, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __PYX_ERR(0, 132, __pyx_L1_error)
+    __PYX_ERR(0, 142, __pyx_L1_error)
   }
   __pyx_L3:;
 
-  /* "tablut.pyx":126
+  /* "tablut.pyx":136
  * # Bit Manipulation Macros
  * #------------------------------------------------------------------------------
  * cdef void set_bit(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3266,7 +4939,7 @@ static void __pyx_f_6tablut_set_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_boa
   __Pyx_RefNannyFinishContext();
 }
 
-/* "tablut.pyx":134
+/* "tablut.pyx":144
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef bint is_bit_set(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3284,7 +4957,7 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("is_bit_set", 1);
 
-  /* "tablut.pyx":135
+  /* "tablut.pyx":145
  * 
  * cdef bint is_bit_set(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3297,21 +4970,21 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   }
   if (__pyx_t_1) {
 
-    /* "tablut.pyx":136
+    /* "tablut.pyx":146
  * cdef bint is_bit_set(Bitboard* board, int index):
  *     if 0 <= index < 63:
  *         return bool(board.low & ((<uint64_t>1) << index))             # <<<<<<<<<<<<<<
  *     elif 63 <= index < 81:
  *         return bool(board.high & ((<uint64_t>1) << (index - 63)))
  */
-    __pyx_t_2 = __Pyx_PyInt_From_uint64_t((__pyx_v_board->low & (((uint64_t)1) << __pyx_v_index))); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 136, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyInt_From_uint64_t((__pyx_v_board->low & (((uint64_t)1) << __pyx_v_index))); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 136, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_r = (!(!__pyx_t_1));
     goto __pyx_L0;
 
-    /* "tablut.pyx":135
+    /* "tablut.pyx":145
  * 
  * cdef bint is_bit_set(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3320,7 +4993,7 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
   }
 
-  /* "tablut.pyx":137
+  /* "tablut.pyx":147
  *     if 0 <= index < 63:
  *         return bool(board.low & ((<uint64_t>1) << index))
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3333,21 +5006,21 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   }
   if (likely(__pyx_t_1)) {
 
-    /* "tablut.pyx":138
+    /* "tablut.pyx":148
  *         return bool(board.low & ((<uint64_t>1) << index))
  *     elif 63 <= index < 81:
  *         return bool(board.high & ((<uint64_t>1) << (index - 63)))             # <<<<<<<<<<<<<<
  *     else:
  *         raise ValueError("Bit index must be between 0 and 80")
  */
-    __pyx_t_2 = __Pyx_PyInt_From_uint64_t((__pyx_v_board->high & (((uint64_t)1) << (__pyx_v_index - 63)))); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 138, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyInt_From_uint64_t((__pyx_v_board->high & (((uint64_t)1) << (__pyx_v_index - 63)))); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 148, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 138, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 148, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_r = (!(!__pyx_t_1));
     goto __pyx_L0;
 
-    /* "tablut.pyx":137
+    /* "tablut.pyx":147
  *     if 0 <= index < 63:
  *         return bool(board.low & ((<uint64_t>1) << index))
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3356,7 +5029,7 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
   }
 
-  /* "tablut.pyx":140
+  /* "tablut.pyx":150
  *         return bool(board.high & ((<uint64_t>1) << (index - 63)))
  *     else:
  *         raise ValueError("Bit index must be between 0 and 80")             # <<<<<<<<<<<<<<
@@ -3364,14 +5037,14 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  * cdef void clear_bit(Bitboard* board, int index):
  */
   /*else*/ {
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 140, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 150, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __PYX_ERR(0, 140, __pyx_L1_error)
+    __PYX_ERR(0, 150, __pyx_L1_error)
   }
 
-  /* "tablut.pyx":134
+  /* "tablut.pyx":144
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef bint is_bit_set(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3389,7 +5062,7 @@ static int __pyx_f_6tablut_is_bit_set(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   return __pyx_r;
 }
 
-/* "tablut.pyx":142
+/* "tablut.pyx":152
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef void clear_bit(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3406,7 +5079,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("clear_bit", 1);
 
-  /* "tablut.pyx":143
+  /* "tablut.pyx":153
  * 
  * cdef void clear_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3419,7 +5092,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   }
   if (__pyx_t_1) {
 
-    /* "tablut.pyx":144
+    /* "tablut.pyx":154
  * cdef void clear_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:
  *         board.low &= ~((<uint64_t>1) << index)             # <<<<<<<<<<<<<<
@@ -3428,7 +5101,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
     __pyx_v_board->low = (__pyx_v_board->low & (~(((uint64_t)1) << __pyx_v_index)));
 
-    /* "tablut.pyx":143
+    /* "tablut.pyx":153
  * 
  * cdef void clear_bit(Bitboard* board, int index):
  *     if 0 <= index < 63:             # <<<<<<<<<<<<<<
@@ -3438,7 +5111,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
     goto __pyx_L3;
   }
 
-  /* "tablut.pyx":145
+  /* "tablut.pyx":155
  *     if 0 <= index < 63:
  *         board.low &= ~((<uint64_t>1) << index)
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3451,7 +5124,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   }
   if (likely(__pyx_t_1)) {
 
-    /* "tablut.pyx":146
+    /* "tablut.pyx":156
  *         board.low &= ~((<uint64_t>1) << index)
  *     elif 63 <= index < 81:
  *         board.high &= ~((<uint64_t>1) << (index - 63))             # <<<<<<<<<<<<<<
@@ -3460,7 +5133,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
     __pyx_v_board->high = (__pyx_v_board->high & (~(((uint64_t)1) << (__pyx_v_index - 63))));
 
-    /* "tablut.pyx":145
+    /* "tablut.pyx":155
  *     if 0 <= index < 63:
  *         board.low &= ~((<uint64_t>1) << index)
  *     elif 63 <= index < 81:             # <<<<<<<<<<<<<<
@@ -3470,7 +5143,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
     goto __pyx_L3;
   }
 
-  /* "tablut.pyx":148
+  /* "tablut.pyx":158
  *         board.high &= ~((<uint64_t>1) << (index - 63))
  *     else:
  *         raise ValueError("Bit index must be between 0 and 80")             # <<<<<<<<<<<<<<
@@ -3478,15 +5151,15 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  * cdef inline uint64_t merge(Bitboard board):
  */
   /*else*/ {
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 148, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 158, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __PYX_ERR(0, 148, __pyx_L1_error)
+    __PYX_ERR(0, 158, __pyx_L1_error)
   }
   __pyx_L3:;
 
-  /* "tablut.pyx":142
+  /* "tablut.pyx":152
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef void clear_bit(Bitboard* board, int index):             # <<<<<<<<<<<<<<
@@ -3503,7 +5176,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   __Pyx_RefNannyFinishContext();
 }
 
-/* "tablut.pyx":150
+/* "tablut.pyx":160
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef inline uint64_t merge(Bitboard board):             # <<<<<<<<<<<<<<
@@ -3514,7 +5187,7 @@ static void __pyx_f_6tablut_clear_bit(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
 static CYTHON_INLINE uint64_t __pyx_f_6tablut_merge(struct __pyx_t_6tablut_Bitboard __pyx_v_board) {
   uint64_t __pyx_r;
 
-  /* "tablut.pyx":151
+  /* "tablut.pyx":161
  * 
  * cdef inline uint64_t merge(Bitboard board):
  *     return board.low | board.high             # <<<<<<<<<<<<<<
@@ -3524,7 +5197,7 @@ static CYTHON_INLINE uint64_t __pyx_f_6tablut_merge(struct __pyx_t_6tablut_Bitbo
   __pyx_r = (__pyx_v_board.low | __pyx_v_board.high);
   goto __pyx_L0;
 
-  /* "tablut.pyx":150
+  /* "tablut.pyx":160
  *         raise ValueError("Bit index must be between 0 and 80")
  * 
  * cdef inline uint64_t merge(Bitboard board):             # <<<<<<<<<<<<<<
@@ -3537,7 +5210,7 @@ static CYTHON_INLINE uint64_t __pyx_f_6tablut_merge(struct __pyx_t_6tablut_Bitbo
   return __pyx_r;
 }
 
-/* "tablut.pyx":153
+/* "tablut.pyx":163
  *     return board.low | board.high
  * 
  * cdef int count_bits(uint64_t b):             # <<<<<<<<<<<<<<
@@ -3550,7 +5223,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
   int __pyx_r;
   int __pyx_t_1;
 
-  /* "tablut.pyx":154
+  /* "tablut.pyx":164
  * 
  * cdef int count_bits(uint64_t b):
  *     cdef int r = 0             # <<<<<<<<<<<<<<
@@ -3559,7 +5232,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
  */
   __pyx_v_r = 0;
 
-  /* "tablut.pyx":155
+  /* "tablut.pyx":165
  * cdef int count_bits(uint64_t b):
  *     cdef int r = 0
  *     while b:             # <<<<<<<<<<<<<<
@@ -3570,7 +5243,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
     __pyx_t_1 = (__pyx_v_b != 0);
     if (!__pyx_t_1) break;
 
-    /* "tablut.pyx":156
+    /* "tablut.pyx":166
  *     cdef int r = 0
  *     while b:
  *         r += 1             # <<<<<<<<<<<<<<
@@ -3579,7 +5252,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
  */
     __pyx_v_r = (__pyx_v_r + 1);
 
-    /* "tablut.pyx":157
+    /* "tablut.pyx":167
  *     while b:
  *         r += 1
  *         b &= b - 1             # <<<<<<<<<<<<<<
@@ -3589,7 +5262,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
     __pyx_v_b = (__pyx_v_b & (__pyx_v_b - 1));
   }
 
-  /* "tablut.pyx":158
+  /* "tablut.pyx":168
  *         r += 1
  *         b &= b - 1
  *     return r             # <<<<<<<<<<<<<<
@@ -3599,7 +5272,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
   __pyx_r = __pyx_v_r;
   goto __pyx_L0;
 
-  /* "tablut.pyx":153
+  /* "tablut.pyx":163
  *     return board.low | board.high
  * 
  * cdef int count_bits(uint64_t b):             # <<<<<<<<<<<<<<
@@ -3612,7 +5285,7 @@ static int __pyx_f_6tablut_count_bits(uint64_t __pyx_v_b) {
   return __pyx_r;
 }
 
-/* "tablut.pyx":160
+/* "tablut.pyx":170
  *     return r
  * 
  * cdef int count_bits_board(Bitboard board):             # <<<<<<<<<<<<<<
@@ -3628,19 +5301,19 @@ static int __pyx_f_6tablut_count_bits_board(struct __pyx_t_6tablut_Bitboard __py
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "tablut.pyx":161
+  /* "tablut.pyx":171
  * 
  * cdef int count_bits_board(Bitboard board):
  *     return count_bits(board.low) + count_bits(board.high)             # <<<<<<<<<<<<<<
  * 
  * #------------------------------------------------------------------------------
  */
-  __pyx_t_1 = __pyx_f_6tablut_count_bits(__pyx_v_board.low); if (unlikely(__pyx_t_1 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 161, __pyx_L1_error)
-  __pyx_t_2 = __pyx_f_6tablut_count_bits(__pyx_v_board.high); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6tablut_count_bits(__pyx_v_board.low); if (unlikely(__pyx_t_1 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 171, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6tablut_count_bits(__pyx_v_board.high); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 171, __pyx_L1_error)
   __pyx_r = (__pyx_t_1 + __pyx_t_2);
   goto __pyx_L0;
 
-  /* "tablut.pyx":160
+  /* "tablut.pyx":170
  *     return r
  * 
  * cdef int count_bits_board(Bitboard board):             # <<<<<<<<<<<<<<
@@ -3656,7 +5329,7 @@ static int __pyx_f_6tablut_count_bits_board(struct __pyx_t_6tablut_Bitboard __py
   return __pyx_r;
 }
 
-/* "tablut.pyx":166
+/* "tablut.pyx":176
  * # Setting, Clearing, Printing Boards
  * #------------------------------------------------------------------------------
  * cdef void clear_all(Bitboard* board):             # <<<<<<<<<<<<<<
@@ -3666,7 +5339,7 @@ static int __pyx_f_6tablut_count_bits_board(struct __pyx_t_6tablut_Bitboard __py
 
 static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *__pyx_v_board) {
 
-  /* "tablut.pyx":167
+  /* "tablut.pyx":177
  * #------------------------------------------------------------------------------
  * cdef void clear_all(Bitboard* board):
  *     board.low = 0             # <<<<<<<<<<<<<<
@@ -3675,7 +5348,7 @@ static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
   __pyx_v_board->low = 0;
 
-  /* "tablut.pyx":168
+  /* "tablut.pyx":178
  * cdef void clear_all(Bitboard* board):
  *     board.low = 0
  *     board.high = 0             # <<<<<<<<<<<<<<
@@ -3684,7 +5357,7 @@ static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
  */
   __pyx_v_board->high = 0;
 
-  /* "tablut.pyx":166
+  /* "tablut.pyx":176
  * # Setting, Clearing, Printing Boards
  * #------------------------------------------------------------------------------
  * cdef void clear_all(Bitboard* board):             # <<<<<<<<<<<<<<
@@ -3695,7 +5368,7 @@ static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
   /* function exit code */
 }
 
-/* "tablut.pyx":170
+/* "tablut.pyx":180
  *     board.high = 0
  * 
  * cdef void set_start_position(Bitboard* board):             # <<<<<<<<<<<<<<
@@ -3705,7 +5378,7 @@ static void __pyx_f_6tablut_clear_all(struct __pyx_t_6tablut_Bitboard *__pyx_v_b
 
 static void __pyx_f_6tablut_set_start_position(struct __pyx_t_6tablut_Bitboard *__pyx_v_board) {
 
-  /* "tablut.pyx":171
+  /* "tablut.pyx":181
  * 
  * cdef void set_start_position(Bitboard* board):
  *     board.low = 0x04223FF888402038             # <<<<<<<<<<<<<<
@@ -3714,7 +5387,7 @@ static void __pyx_f_6tablut_set_start_position(struct __pyx_t_6tablut_Bitboard *
  */
   __pyx_v_board->low = 0x04223FF888402038;
 
-  /* "tablut.pyx":172
+  /* "tablut.pyx":182
  * cdef void set_start_position(Bitboard* board):
  *     board.low = 0x04223FF888402038
  *     board.high = 0x0000000000007010             # <<<<<<<<<<<<<<
@@ -3723,7 +5396,7 @@ static void __pyx_f_6tablut_set_start_position(struct __pyx_t_6tablut_Bitboard *
  */
   __pyx_v_board->high = 0x0000000000007010;
 
-  /* "tablut.pyx":170
+  /* "tablut.pyx":180
  *     board.high = 0
  * 
  * cdef void set_start_position(Bitboard* board):             # <<<<<<<<<<<<<<
@@ -3734,7 +5407,7 @@ static void __pyx_f_6tablut_set_start_position(struct __pyx_t_6tablut_Bitboard *
   /* function exit code */
 }
 
-/* "tablut.pyx":174
+/* "tablut.pyx":184
  *     board.high = 0x0000000000007010
  * 
  * cdef Bitboard create_board():             # <<<<<<<<<<<<<<
@@ -3749,26 +5422,26 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_create_board(void) {
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "tablut.pyx":176
+  /* "tablut.pyx":186
  * cdef Bitboard create_board():
  *     cdef Bitboard bitboard
  *     set_start_position(&bitboard)             # <<<<<<<<<<<<<<
  *     return bitboard
  * 
  */
-  __pyx_f_6tablut_set_start_position((&__pyx_v_bitboard)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 176, __pyx_L1_error)
+  __pyx_f_6tablut_set_start_position((&__pyx_v_bitboard)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 186, __pyx_L1_error)
 
-  /* "tablut.pyx":177
+  /* "tablut.pyx":187
  *     cdef Bitboard bitboard
  *     set_start_position(&bitboard)
  *     return bitboard             # <<<<<<<<<<<<<<
  * 
- * def create_start_position():
+ * cdef inline is_board_empty(Bitboard board):
  */
   __pyx_r = __pyx_v_bitboard;
   goto __pyx_L0;
 
-  /* "tablut.pyx":174
+  /* "tablut.pyx":184
  *     board.high = 0x0000000000007010
  * 
  * cdef Bitboard create_board():             # <<<<<<<<<<<<<<
@@ -3784,8 +5457,140 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_create_board(void) {
   return __pyx_r;
 }
 
-/* "tablut.pyx":179
+/* "tablut.pyx":189
  *     return bitboard
+ * 
+ * cdef inline is_board_empty(Bitboard board):             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns True if board has no bits set, else False
+ */
+
+static CYTHON_INLINE PyObject *__pyx_f_6tablut_is_board_empty(struct __pyx_t_6tablut_Bitboard __pyx_v_board) {
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  int __pyx_t_2;
+  PyObject *__pyx_t_3 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("is_board_empty", 1);
+
+  /* "tablut.pyx":193
+ *     Returns True if board has no bits set, else False
+ *     """
+ *     return board.low == 0 and board.high == 0             # <<<<<<<<<<<<<<
+ * 
+ * cdef inline same_board(Bitboard board_1, Bitboard board_2):
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __pyx_t_2 = (__pyx_v_board.low == 0);
+  if (__pyx_t_2) {
+  } else {
+    __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 193, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_1 = __pyx_t_3;
+    __pyx_t_3 = 0;
+    goto __pyx_L3_bool_binop_done;
+  }
+  __pyx_t_2 = (__pyx_v_board.high == 0);
+  __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 193, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_1 = __pyx_t_3;
+  __pyx_t_3 = 0;
+  __pyx_L3_bool_binop_done:;
+  __pyx_r = __pyx_t_1;
+  __pyx_t_1 = 0;
+  goto __pyx_L0;
+
+  /* "tablut.pyx":189
+ *     return bitboard
+ * 
+ * cdef inline is_board_empty(Bitboard board):             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns True if board has no bits set, else False
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_AddTraceback("tablut.is_board_empty", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":195
+ *     return board.low == 0 and board.high == 0
+ * 
+ * cdef inline same_board(Bitboard board_1, Bitboard board_2):             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns True if two given boards have the same set bits, else False.
+ */
+
+static CYTHON_INLINE PyObject *__pyx_f_6tablut_same_board(struct __pyx_t_6tablut_Bitboard __pyx_v_board_1, struct __pyx_t_6tablut_Bitboard __pyx_v_board_2) {
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  int __pyx_t_2;
+  PyObject *__pyx_t_3 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("same_board", 1);
+
+  /* "tablut.pyx":199
+ *     Returns True if two given boards have the same set bits, else False.
+ *     """
+ *     return board_1.low == board_2.low and board_1.high == board_2.high             # <<<<<<<<<<<<<<
+ * 
+ * def create_start_position():
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __pyx_t_2 = (__pyx_v_board_1.low == __pyx_v_board_2.low);
+  if (__pyx_t_2) {
+  } else {
+    __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 199, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_1 = __pyx_t_3;
+    __pyx_t_3 = 0;
+    goto __pyx_L3_bool_binop_done;
+  }
+  __pyx_t_2 = (__pyx_v_board_1.high == __pyx_v_board_2.high);
+  __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 199, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_1 = __pyx_t_3;
+  __pyx_t_3 = 0;
+  __pyx_L3_bool_binop_done:;
+  __pyx_r = __pyx_t_1;
+  __pyx_t_1 = 0;
+  goto __pyx_L0;
+
+  /* "tablut.pyx":195
+ *     return board.low == 0 and board.high == 0
+ * 
+ * cdef inline same_board(Bitboard board_1, Bitboard board_2):             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns True if two given boards have the same set bits, else False.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_AddTraceback("tablut.same_board", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":201
+ *     return board_1.low == board_2.low and board_1.high == board_2.high
  * 
  * def create_start_position():             # <<<<<<<<<<<<<<
  *     return create_board()
@@ -3818,7 +5623,7 @@ static PyObject *__pyx_pf_6tablut_create_start_position(CYTHON_UNUSED PyObject *
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("create_start_position", 1);
 
-  /* "tablut.pyx":180
+  /* "tablut.pyx":202
  * 
  * def create_start_position():
  *     return create_board()             # <<<<<<<<<<<<<<
@@ -3826,15 +5631,15 @@ static PyObject *__pyx_pf_6tablut_create_start_position(CYTHON_UNUSED PyObject *
  * def print_board(Bitboard board):
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6tablut_create_board(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 180, __pyx_L1_error)
-  __pyx_t_2 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 180, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6tablut_create_board(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 202, __pyx_L1_error)
+  __pyx_t_2 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 202, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
   goto __pyx_L0;
 
-  /* "tablut.pyx":179
- *     return bitboard
+  /* "tablut.pyx":201
+ *     return board_1.low == board_2.low and board_1.high == board_2.high
  * 
  * def create_start_position():             # <<<<<<<<<<<<<<
  *     return create_board()
@@ -3852,7 +5657,7 @@ static PyObject *__pyx_pf_6tablut_create_start_position(CYTHON_UNUSED PyObject *
   return __pyx_r;
 }
 
-/* "tablut.pyx":182
+/* "tablut.pyx":204
  *     return create_board()
  * 
  * def print_board(Bitboard board):             # <<<<<<<<<<<<<<
@@ -3913,23 +5718,23 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 182, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 204, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "print_board") < 0)) __PYX_ERR(0, 182, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "print_board") < 0)) __PYX_ERR(0, 204, __pyx_L3_error)
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_Arg_FASTCALL(__pyx_args, 0);
     }
-    __pyx_v_board = __pyx_convert__from_py_struct____pyx_t_6tablut_Bitboard(values[0]); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 182, __pyx_L3_error)
+    __pyx_v_board = __pyx_convert__from_py_struct____pyx_t_6tablut_Bitboard(values[0]); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 204, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("print_board", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 182, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("print_board", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 204, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -3975,7 +5780,7 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("print_board", 1);
 
-  /* "tablut.pyx":184
+  /* "tablut.pyx":206
  * def print_board(Bitboard board):
  *     cdef int rank, file, sq
  *     for rank in range(8, -1, -1):             # <<<<<<<<<<<<<<
@@ -3985,33 +5790,33 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   for (__pyx_t_1 = 8; __pyx_t_1 > -1; __pyx_t_1-=1) {
     __pyx_v_rank = __pyx_t_1;
 
-    /* "tablut.pyx":185
+    /* "tablut.pyx":207
  *     cdef int rank, file, sq
  *     for rank in range(8, -1, -1):
  *         print(f"{rank+1} ", end="")             # <<<<<<<<<<<<<<
  *         for file in range(9):
  *             sq = rank * 9 + file
  */
-    __pyx_t_2 = __Pyx_PyUnicode_From_long((__pyx_v_rank + 1), 0, ' ', 'd'); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 185, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyUnicode_From_long((__pyx_v_rank + 1), 0, ' ', 'd'); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_3 = __Pyx_PyUnicode_ConcatInPlace(__pyx_t_2, __pyx_kp_u__4); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 185, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyUnicode_ConcatInPlace(__pyx_t_2, __pyx_kp_u__4); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 185, __pyx_L1_error)
+    __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_GIVEREF(__pyx_t_3);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_3)) __PYX_ERR(0, 185, __pyx_L1_error);
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_3)) __PYX_ERR(0, 207, __pyx_L1_error);
     __pyx_t_3 = 0;
-    __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 185, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 185, __pyx_L1_error)
-    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_2, __pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 185, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 207, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_2, __pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "tablut.pyx":186
+    /* "tablut.pyx":208
  *     for rank in range(8, -1, -1):
  *         print(f"{rank+1} ", end="")
  *         for file in range(9):             # <<<<<<<<<<<<<<
@@ -4021,7 +5826,7 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
     for (__pyx_t_5 = 0; __pyx_t_5 < 9; __pyx_t_5+=1) {
       __pyx_v_file = __pyx_t_5;
 
-      /* "tablut.pyx":187
+      /* "tablut.pyx":209
  *         print(f"{rank+1} ", end="")
  *         for file in range(9):
  *             sq = rank * 9 + file             # <<<<<<<<<<<<<<
@@ -4030,14 +5835,14 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
  */
       __pyx_v_sq = ((__pyx_v_rank * 9) + __pyx_v_file);
 
-      /* "tablut.pyx":188
+      /* "tablut.pyx":210
  *         for file in range(9):
  *             sq = rank * 9 + file
  *             print("1 " if is_bit_set(&board, sq) else ". ", end="")             # <<<<<<<<<<<<<<
  *         print()
  *     print("  a b c d e f g h i")
  */
-      __pyx_t_6 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_sq); if (unlikely(__pyx_t_6 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 188, __pyx_L1_error)
+      __pyx_t_6 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_sq); if (unlikely(__pyx_t_6 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 210, __pyx_L1_error)
       if (__pyx_t_6) {
         __Pyx_INCREF(__pyx_kp_u_1);
         __pyx_t_4 = __pyx_kp_u_1;
@@ -4045,52 +5850,52 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
         __Pyx_INCREF(__pyx_kp_u__6);
         __pyx_t_4 = __pyx_kp_u__6;
       }
-      __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 188, __pyx_L1_error)
+      __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 210, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
       __Pyx_GIVEREF(__pyx_t_4);
-      if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4)) __PYX_ERR(0, 188, __pyx_L1_error);
+      if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4)) __PYX_ERR(0, 210, __pyx_L1_error);
       __pyx_t_4 = 0;
-      __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 188, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 210, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
-      if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 188, __pyx_L1_error)
-      __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 188, __pyx_L1_error)
+      if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 210, __pyx_L1_error)
+      __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 210, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     }
 
-    /* "tablut.pyx":189
+    /* "tablut.pyx":211
  *             sq = rank * 9 + file
  *             print("1 " if is_bit_set(&board, sq) else ". ", end="")
  *         print()             # <<<<<<<<<<<<<<
  *     print("  a b c d e f g h i")
  *     print(f"Bitboard: {board.low} {board.high}")
  */
-    __pyx_t_2 = __Pyx_PyObject_CallNoArg(__pyx_builtin_print); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 189, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_CallNoArg(__pyx_builtin_print); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 211, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   }
 
-  /* "tablut.pyx":190
+  /* "tablut.pyx":212
  *             print("1 " if is_bit_set(&board, sq) else ". ", end="")
  *         print()
  *     print("  a b c d e f g h i")             # <<<<<<<<<<<<<<
  *     print(f"Bitboard: {board.low} {board.high}")
  *     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")
  */
-  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__7, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 190, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__7, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 212, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":191
+  /* "tablut.pyx":213
  *         print()
  *     print("  a b c d e f g h i")
  *     print(f"Bitboard: {board.low} {board.high}")             # <<<<<<<<<<<<<<
  *     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")
  * 
  */
-  __pyx_t_2 = PyTuple_New(4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_2 = PyTuple_New(4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_7 = 0;
   __pyx_t_8 = 127;
@@ -4098,9 +5903,9 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __pyx_t_7 += 10;
   __Pyx_GIVEREF(__pyx_kp_u_Bitboard);
   PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_kp_u_Bitboard);
-  __pyx_t_4 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.low); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.low); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_3 = __Pyx_PyObject_FormatSimple(__pyx_t_4, __pyx_empty_unicode); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_FormatSimple(__pyx_t_4, __pyx_empty_unicode); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __pyx_t_8 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_3) > __pyx_t_8) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_3) : __pyx_t_8;
@@ -4112,9 +5917,9 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __pyx_t_7 += 1;
   __Pyx_GIVEREF(__pyx_kp_u__4);
   PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_kp_u__4);
-  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.high); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.high); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_FormatSimple(__pyx_t_3, __pyx_empty_unicode); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_FormatSimple(__pyx_t_3, __pyx_empty_unicode); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_t_8 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_4) > __pyx_t_8) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_4) : __pyx_t_8;
@@ -4122,22 +5927,22 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __Pyx_GIVEREF(__pyx_t_4);
   PyTuple_SET_ITEM(__pyx_t_2, 3, __pyx_t_4);
   __pyx_t_4 = 0;
-  __pyx_t_4 = __Pyx_PyUnicode_Join(__pyx_t_2, 4, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyUnicode_Join(__pyx_t_2, 4, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 191, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 213, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":192
+  /* "tablut.pyx":214
  *     print("  a b c d e f g h i")
  *     print(f"Bitboard: {board.low} {board.high}")
  *     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")             # <<<<<<<<<<<<<<
  * 
  * #------------------------------------------------------------------------------
  */
-  __pyx_t_2 = PyTuple_New(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_2 = PyTuple_New(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_7 = 0;
   __pyx_t_8 = 127;
@@ -4145,9 +5950,9 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __pyx_t_7 += 18;
   __Pyx_GIVEREF(__pyx_kp_u_Bitboard_hex_0x);
   PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_kp_u_Bitboard_hex_0x);
-  __pyx_t_4 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.low); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.low); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_3 = __Pyx_PyObject_Format(__pyx_t_4, __pyx_kp_u_016X); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_Format(__pyx_t_4, __pyx_kp_u_016X); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __pyx_t_8 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_3) > __pyx_t_8) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_3) : __pyx_t_8;
@@ -4159,9 +5964,9 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __pyx_t_7 += 3;
   __Pyx_GIVEREF(__pyx_kp_u_0x);
   PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_kp_u_0x);
-  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.high); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_board.high); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_Format(__pyx_t_3, __pyx_kp_u_016X); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_Format(__pyx_t_3, __pyx_kp_u_016X); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_t_8 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_4) > __pyx_t_8) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_4) : __pyx_t_8;
@@ -4173,15 +5978,15 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   __pyx_t_7 += 1;
   __Pyx_GIVEREF(__pyx_kp_u__8);
   PyTuple_SET_ITEM(__pyx_t_2, 4, __pyx_kp_u__8);
-  __pyx_t_4 = __Pyx_PyUnicode_Join(__pyx_t_2, 5, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyUnicode_Join(__pyx_t_2, 5, __pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 214, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":182
+  /* "tablut.pyx":204
  *     return create_board()
  * 
  * def print_board(Bitboard board):             # <<<<<<<<<<<<<<
@@ -4204,12 +6009,12 @@ static PyObject *__pyx_pf_6tablut_2print_board(CYTHON_UNUSED PyObject *__pyx_sel
   return __pyx_r;
 }
 
-/* "tablut.pyx":203
+/* "tablut.pyx":219
+ * # Find Moves on the Fly
  * #------------------------------------------------------------------------------
- * # find possible moves for a given square and boardstate on the fly
  * cdef Bitboard find_moves_otf(Bitboard board, int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard moves = Bitboard(0,0)
- *     cdef int j, rank, file
+ *     """
+ *     Calculates moves on the fly for a given Bitboard and square. Returns Bitboard moves.
  */
 
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __pyx_t_6tablut_Bitboard __pyx_v_board, int __pyx_v_square) {
@@ -4227,9 +6032,9 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "tablut.pyx":204
- * # find possible moves for a given square and boardstate on the fly
- * cdef Bitboard find_moves_otf(Bitboard board, int square):
+  /* "tablut.pyx":223
+ *     Calculates moves on the fly for a given Bitboard and square. Returns Bitboard moves.
+ *     """
  *     cdef Bitboard moves = Bitboard(0,0)             # <<<<<<<<<<<<<<
  *     cdef int j, rank, file
  * 
@@ -4238,7 +6043,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   __pyx_t_1.high = 0;
   __pyx_v_moves = __pyx_t_1;
 
-  /* "tablut.pyx":207
+  /* "tablut.pyx":226
  *     cdef int j, rank, file
  * 
  *     rank = square // 9             # <<<<<<<<<<<<<<
@@ -4247,7 +6052,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
   __pyx_v_rank = __Pyx_div_long(__pyx_v_square, 9);
 
-  /* "tablut.pyx":208
+  /* "tablut.pyx":227
  * 
  *     rank = square // 9
  *     file = square % 9             # <<<<<<<<<<<<<<
@@ -4256,7 +6061,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
   __pyx_v_file = __Pyx_mod_long(__pyx_v_square, 9);
 
-  /* "tablut.pyx":211
+  /* "tablut.pyx":230
  * 
  *     # move east
  *     for j in range(square + 1, (rank + 1) * 9):             # <<<<<<<<<<<<<<
@@ -4268,17 +6073,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   for (__pyx_t_4 = (__pyx_v_square + 1); __pyx_t_4 < __pyx_t_3; __pyx_t_4+=1) {
     __pyx_v_j = __pyx_t_4;
 
-    /* "tablut.pyx":212
+    /* "tablut.pyx":231
  *     # move east
  *     for j in range(square + 1, (rank + 1) * 9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *             break
  *         else:
  */
-    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 212, __pyx_L1_error)
+    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 231, __pyx_L1_error)
     if (__pyx_t_5) {
 
-      /* "tablut.pyx":213
+      /* "tablut.pyx":232
  *     for j in range(square + 1, (rank + 1) * 9):
  *         if is_bit_set(&board, j):
  *             break             # <<<<<<<<<<<<<<
@@ -4287,7 +6092,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
       goto __pyx_L4_break;
 
-      /* "tablut.pyx":212
+      /* "tablut.pyx":231
  *     # move east
  *     for j in range(square + 1, (rank + 1) * 9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4296,7 +6101,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
     }
 
-    /* "tablut.pyx":215
+    /* "tablut.pyx":234
  *             break
  *         else:
  *             set_bit(&moves, j)             # <<<<<<<<<<<<<<
@@ -4304,12 +6109,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  *     # move west
  */
     /*else*/ {
-      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 215, __pyx_L1_error)
+      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 234, __pyx_L1_error)
     }
   }
   __pyx_L4_break:;
 
-  /* "tablut.pyx":218
+  /* "tablut.pyx":237
  * 
  *     # move west
  *     for j in range(square - 1, rank * 9 - 1, -1):             # <<<<<<<<<<<<<<
@@ -4321,17 +6126,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   for (__pyx_t_4 = (__pyx_v_square - 1); __pyx_t_4 > __pyx_t_3; __pyx_t_4-=1) {
     __pyx_v_j = __pyx_t_4;
 
-    /* "tablut.pyx":219
+    /* "tablut.pyx":238
  *     # move west
  *     for j in range(square - 1, rank * 9 - 1, -1):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *             break
  *         else:
  */
-    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 219, __pyx_L1_error)
+    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 238, __pyx_L1_error)
     if (__pyx_t_5) {
 
-      /* "tablut.pyx":220
+      /* "tablut.pyx":239
  *     for j in range(square - 1, rank * 9 - 1, -1):
  *         if is_bit_set(&board, j):
  *             break             # <<<<<<<<<<<<<<
@@ -4340,7 +6145,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
       goto __pyx_L7_break;
 
-      /* "tablut.pyx":219
+      /* "tablut.pyx":238
  *     # move west
  *     for j in range(square - 1, rank * 9 - 1, -1):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4349,7 +6154,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
     }
 
-    /* "tablut.pyx":222
+    /* "tablut.pyx":241
  *             break
  *         else:
  *             set_bit(&moves, j)             # <<<<<<<<<<<<<<
@@ -4357,12 +6162,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  *     # move north
  */
     /*else*/ {
-      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 222, __pyx_L1_error)
+      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 241, __pyx_L1_error)
     }
   }
   __pyx_L7_break:;
 
-  /* "tablut.pyx":225
+  /* "tablut.pyx":244
  * 
  *     # move north
  *     for j in range(square + 9, 81, 9):             # <<<<<<<<<<<<<<
@@ -4372,17 +6177,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   for (__pyx_t_4 = (__pyx_v_square + 9); __pyx_t_4 < 81; __pyx_t_4+=9) {
     __pyx_v_j = __pyx_t_4;
 
-    /* "tablut.pyx":226
+    /* "tablut.pyx":245
  *     # move north
  *     for j in range(square + 9, 81, 9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *             break
  *         else:
  */
-    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 245, __pyx_L1_error)
     if (__pyx_t_5) {
 
-      /* "tablut.pyx":227
+      /* "tablut.pyx":246
  *     for j in range(square + 9, 81, 9):
  *         if is_bit_set(&board, j):
  *             break             # <<<<<<<<<<<<<<
@@ -4391,7 +6196,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
       goto __pyx_L10_break;
 
-      /* "tablut.pyx":226
+      /* "tablut.pyx":245
  *     # move north
  *     for j in range(square + 9, 81, 9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4400,7 +6205,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
     }
 
-    /* "tablut.pyx":229
+    /* "tablut.pyx":248
  *             break
  *         else:
  *             set_bit(&moves, j)             # <<<<<<<<<<<<<<
@@ -4408,12 +6213,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  *     # move south
  */
     /*else*/ {
-      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 229, __pyx_L1_error)
+      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 248, __pyx_L1_error)
     }
   }
   __pyx_L10_break:;
 
-  /* "tablut.pyx":232
+  /* "tablut.pyx":251
  * 
  *     # move south
  *     for j in range(square - 9, -1, -9):             # <<<<<<<<<<<<<<
@@ -4423,17 +6228,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   for (__pyx_t_4 = (__pyx_v_square - 9); __pyx_t_4 > -1; __pyx_t_4-=9) {
     __pyx_v_j = __pyx_t_4;
 
-    /* "tablut.pyx":233
+    /* "tablut.pyx":252
  *     # move south
  *     for j in range(square - 9, -1, -9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *             break
  *         else:
  */
-    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 233, __pyx_L1_error)
+    __pyx_t_5 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_5 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 252, __pyx_L1_error)
     if (__pyx_t_5) {
 
-      /* "tablut.pyx":234
+      /* "tablut.pyx":253
  *     for j in range(square - 9, -1, -9):
  *         if is_bit_set(&board, j):
  *             break             # <<<<<<<<<<<<<<
@@ -4442,7 +6247,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
       goto __pyx_L13_break;
 
-      /* "tablut.pyx":233
+      /* "tablut.pyx":252
  *     # move south
  *     for j in range(square - 9, -1, -9):
  *         if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4451,7 +6256,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  */
     }
 
-    /* "tablut.pyx":236
+    /* "tablut.pyx":255
  *             break
  *         else:
  *             set_bit(&moves, j)             # <<<<<<<<<<<<<<
@@ -4459,12 +6264,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
  *     return moves
  */
     /*else*/ {
-      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 236, __pyx_L1_error)
+      __pyx_f_6tablut_set_bit((&__pyx_v_moves), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 255, __pyx_L1_error)
     }
   }
   __pyx_L13_break:;
 
-  /* "tablut.pyx":238
+  /* "tablut.pyx":257
  *             set_bit(&moves, j)
  * 
  *     return moves             # <<<<<<<<<<<<<<
@@ -4474,12 +6279,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   __pyx_r = __pyx_v_moves;
   goto __pyx_L0;
 
-  /* "tablut.pyx":203
+  /* "tablut.pyx":219
+ * # Find Moves on the Fly
  * #------------------------------------------------------------------------------
- * # find possible moves for a given square and boardstate on the fly
  * cdef Bitboard find_moves_otf(Bitboard board, int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard moves = Bitboard(0,0)
- *     cdef int j, rank, file
+ *     """
+ *     Calculates moves on the fly for a given Bitboard and square. Returns Bitboard moves.
  */
 
   /* function exit code */
@@ -4490,12 +6295,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_find_moves_otf(struct __p
   return __pyx_r;
 }
 
-/* "tablut.pyx":243
- * # Generating Blocker Masks
+/* "tablut.pyx":262
+ * # Generating Blocker Masks, Blocker Bits
  * #------------------------------------------------------------------------------
  * cdef Bitboard build_blocker_masks(Bitboard board, int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard blockers = Bitboard(0,0)
- *     cdef int j, rank, file
+ *     """
+ *     Builds a mask showing the full set of blocker squares for a given Bitboard and square. Returns Bitboard with all blockers.
  */
 
 static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struct __pyx_t_6tablut_Bitboard __pyx_v_board, int __pyx_v_square) {
@@ -4516,9 +6321,9 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("build_blocker_masks", 1);
 
-  /* "tablut.pyx":244
- * #------------------------------------------------------------------------------
- * cdef Bitboard build_blocker_masks(Bitboard board, int square):
+  /* "tablut.pyx":268
+ *     Use BLOCKER_MASK[square] instead, this was used primarily to build BLOCKER_MASK constants.
+ *     """
  *     cdef Bitboard blockers = Bitboard(0,0)             # <<<<<<<<<<<<<<
  *     cdef int j, rank, file
  * 
@@ -4527,17 +6332,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
   __pyx_t_1.high = 0;
   __pyx_v_blockers = __pyx_t_1;
 
-  /* "tablut.pyx":248
+  /* "tablut.pyx":272
  * 
  *     # rank moves
  *     if is_bit_set(&board, square):             # <<<<<<<<<<<<<<
  * 
  *       rank = square // 9
  */
-  __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_square); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 248, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_square); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 272, __pyx_L1_error)
   if (__pyx_t_2) {
 
-    /* "tablut.pyx":250
+    /* "tablut.pyx":274
  *     if is_bit_set(&board, square):
  * 
  *       rank = square // 9             # <<<<<<<<<<<<<<
@@ -4546,7 +6351,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
     __pyx_v_rank = __Pyx_div_long(__pyx_v_square, 9);
 
-    /* "tablut.pyx":251
+    /* "tablut.pyx":275
  * 
  *       rank = square // 9
  *       file = square % 9             # <<<<<<<<<<<<<<
@@ -4555,7 +6360,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
     __pyx_v_file = __Pyx_mod_long(__pyx_v_square, 9);
 
-    /* "tablut.pyx":254
+    /* "tablut.pyx":278
  * 
  *       # move east
  *       for j in range(square + 1, (rank + 1) * 9 - 1):             # <<<<<<<<<<<<<<
@@ -4567,17 +6372,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
     for (__pyx_t_5 = (__pyx_v_square + 1); __pyx_t_5 < __pyx_t_4; __pyx_t_5+=1) {
       __pyx_v_j = __pyx_t_5;
 
-      /* "tablut.pyx":255
+      /* "tablut.pyx":279
  *       # move east
  *       for j in range(square + 1, (rank + 1) * 9 - 1):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *               break
  *           else:
  */
-      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 255, __pyx_L1_error)
+      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 279, __pyx_L1_error)
       if (__pyx_t_2) {
 
-        /* "tablut.pyx":256
+        /* "tablut.pyx":280
  *       for j in range(square + 1, (rank + 1) * 9 - 1):
  *           if is_bit_set(&board, j):
  *               break             # <<<<<<<<<<<<<<
@@ -4586,7 +6391,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
         goto __pyx_L5_break;
 
-        /* "tablut.pyx":255
+        /* "tablut.pyx":279
  *       # move east
  *       for j in range(square + 1, (rank + 1) * 9 - 1):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4595,7 +6400,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
       }
 
-      /* "tablut.pyx":258
+      /* "tablut.pyx":282
  *               break
  *           else:
  *               set_bit(&blockers, j)             # <<<<<<<<<<<<<<
@@ -4603,12 +6408,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  *       # move west
  */
       /*else*/ {
-        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 258, __pyx_L1_error)
+        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 282, __pyx_L1_error)
       }
     }
     __pyx_L5_break:;
 
-    /* "tablut.pyx":261
+    /* "tablut.pyx":285
  * 
  *       # move west
  *       for j in range(square - 1, rank * 9, -1):             # <<<<<<<<<<<<<<
@@ -4620,17 +6425,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
     for (__pyx_t_5 = (__pyx_v_square - 1); __pyx_t_5 > __pyx_t_4; __pyx_t_5-=1) {
       __pyx_v_j = __pyx_t_5;
 
-      /* "tablut.pyx":262
+      /* "tablut.pyx":286
  *       # move west
  *       for j in range(square - 1, rank * 9, -1):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *               break
  *           else:
  */
-      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 262, __pyx_L1_error)
+      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 286, __pyx_L1_error)
       if (__pyx_t_2) {
 
-        /* "tablut.pyx":263
+        /* "tablut.pyx":287
  *       for j in range(square - 1, rank * 9, -1):
  *           if is_bit_set(&board, j):
  *               break             # <<<<<<<<<<<<<<
@@ -4639,7 +6444,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
         goto __pyx_L8_break;
 
-        /* "tablut.pyx":262
+        /* "tablut.pyx":286
  *       # move west
  *       for j in range(square - 1, rank * 9, -1):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4648,7 +6453,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
       }
 
-      /* "tablut.pyx":265
+      /* "tablut.pyx":289
  *               break
  *           else:
  *               set_bit(&blockers, j)             # <<<<<<<<<<<<<<
@@ -4656,12 +6461,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  *       # move north
  */
       /*else*/ {
-        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 265, __pyx_L1_error)
+        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 289, __pyx_L1_error)
       }
     }
     __pyx_L8_break:;
 
-    /* "tablut.pyx":268
+    /* "tablut.pyx":292
  * 
  *       # move north
  *       for j in range(square + 9, 72, 9):             # <<<<<<<<<<<<<<
@@ -4671,17 +6476,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
     for (__pyx_t_5 = (__pyx_v_square + 9); __pyx_t_5 < 72; __pyx_t_5+=9) {
       __pyx_v_j = __pyx_t_5;
 
-      /* "tablut.pyx":269
+      /* "tablut.pyx":293
  *       # move north
  *       for j in range(square + 9, 72, 9):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *               break
  *           else:
  */
-      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 269, __pyx_L1_error)
+      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 293, __pyx_L1_error)
       if (__pyx_t_2) {
 
-        /* "tablut.pyx":270
+        /* "tablut.pyx":294
  *       for j in range(square + 9, 72, 9):
  *           if is_bit_set(&board, j):
  *               break             # <<<<<<<<<<<<<<
@@ -4690,7 +6495,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
         goto __pyx_L11_break;
 
-        /* "tablut.pyx":269
+        /* "tablut.pyx":293
  *       # move north
  *       for j in range(square + 9, 72, 9):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4699,7 +6504,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
       }
 
-      /* "tablut.pyx":272
+      /* "tablut.pyx":296
  *               break
  *           else:
  *               set_bit(&blockers, j)             # <<<<<<<<<<<<<<
@@ -4707,12 +6512,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  *       # move south
  */
       /*else*/ {
-        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 272, __pyx_L1_error)
+        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 296, __pyx_L1_error)
       }
     }
     __pyx_L11_break:;
 
-    /* "tablut.pyx":275
+    /* "tablut.pyx":299
  * 
  *       # move south
  *       for j in range(square - 9, 8, -9):             # <<<<<<<<<<<<<<
@@ -4722,17 +6527,17 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
     for (__pyx_t_5 = (__pyx_v_square - 9); __pyx_t_5 > 8; __pyx_t_5-=9) {
       __pyx_v_j = __pyx_t_5;
 
-      /* "tablut.pyx":276
+      /* "tablut.pyx":300
  *       # move south
  *       for j in range(square - 9, 8, -9):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
  *               break
  *           else:
  */
-      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 276, __pyx_L1_error)
+      __pyx_t_2 = __pyx_f_6tablut_is_bit_set((&__pyx_v_board), __pyx_v_j); if (unlikely(__pyx_t_2 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 300, __pyx_L1_error)
       if (__pyx_t_2) {
 
-        /* "tablut.pyx":277
+        /* "tablut.pyx":301
  *       for j in range(square - 9, 8, -9):
  *           if is_bit_set(&board, j):
  *               break             # <<<<<<<<<<<<<<
@@ -4741,7 +6546,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
         goto __pyx_L14_break;
 
-        /* "tablut.pyx":276
+        /* "tablut.pyx":300
  *       # move south
  *       for j in range(square - 9, 8, -9):
  *           if is_bit_set(&board, j):             # <<<<<<<<<<<<<<
@@ -4750,7 +6555,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  */
       }
 
-      /* "tablut.pyx":279
+      /* "tablut.pyx":303
  *               break
  *           else:
  *               set_bit(&blockers, j)             # <<<<<<<<<<<<<<
@@ -4758,12 +6563,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  *       print("no piece on square")
  */
       /*else*/ {
-        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 279, __pyx_L1_error)
+        __pyx_f_6tablut_set_bit((&__pyx_v_blockers), __pyx_v_j); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 303, __pyx_L1_error)
       }
     }
     __pyx_L14_break:;
 
-    /* "tablut.pyx":248
+    /* "tablut.pyx":272
  * 
  *     # rank moves
  *     if is_bit_set(&board, square):             # <<<<<<<<<<<<<<
@@ -4773,7 +6578,7 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
     goto __pyx_L3;
   }
 
-  /* "tablut.pyx":281
+  /* "tablut.pyx":305
  *               set_bit(&blockers, j)
  *     else:
  *       print("no piece on square")             # <<<<<<<<<<<<<<
@@ -4781,13 +6586,13 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
  *     return blockers
  */
   /*else*/ {
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__9, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 281, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__9, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 305, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   }
   __pyx_L3:;
 
-  /* "tablut.pyx":283
+  /* "tablut.pyx":307
  *       print("no piece on square")
  * 
  *     return blockers             # <<<<<<<<<<<<<<
@@ -4797,12 +6602,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
   __pyx_r = __pyx_v_blockers;
   goto __pyx_L0;
 
-  /* "tablut.pyx":243
- * # Generating Blocker Masks
+  /* "tablut.pyx":262
+ * # Generating Blocker Masks, Blocker Bits
  * #------------------------------------------------------------------------------
  * cdef Bitboard build_blocker_masks(Bitboard board, int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard blockers = Bitboard(0,0)
- *     cdef int j, rank, file
+ *     """
+ *     Builds a mask showing the full set of blocker squares for a given Bitboard and square. Returns Bitboard with all blockers.
  */
 
   /* function exit code */
@@ -4815,12 +6620,12 @@ static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_build_blocker_masks(struc
   return __pyx_r;
 }
 
-/* "tablut.pyx":285
+/* "tablut.pyx":309
  *     return blockers
  * 
  * cdef void print_masks():             # <<<<<<<<<<<<<<
- *     cdef Bitboard bitboard
- *     cdef Bitboard blockers
+ *     """
+ *     Used to print BLOCKER_MASK array.
  */
 
 static void __pyx_f_6tablut_print_masks(void) {
@@ -4840,7 +6645,7 @@ static void __pyx_f_6tablut_print_masks(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("print_masks", 1);
 
-  /* "tablut.pyx":290
+  /* "tablut.pyx":317
  *     cdef int i
  * 
  *     for i in range(81):             # <<<<<<<<<<<<<<
@@ -4850,42 +6655,42 @@ static void __pyx_f_6tablut_print_masks(void) {
   for (__pyx_t_1 = 0; __pyx_t_1 < 81; __pyx_t_1+=1) {
     __pyx_v_i = __pyx_t_1;
 
-    /* "tablut.pyx":291
+    /* "tablut.pyx":318
  * 
  *     for i in range(81):
  *       clear_all(&bitboard)             # <<<<<<<<<<<<<<
  *       set_bit(&bitboard, i)
  *       blockers = build_blocker_masks(bitboard, i)
  */
-    __pyx_f_6tablut_clear_all((&__pyx_v_bitboard)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 291, __pyx_L1_error)
+    __pyx_f_6tablut_clear_all((&__pyx_v_bitboard)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 318, __pyx_L1_error)
 
-    /* "tablut.pyx":292
+    /* "tablut.pyx":319
  *     for i in range(81):
  *       clear_all(&bitboard)
  *       set_bit(&bitboard, i)             # <<<<<<<<<<<<<<
  *       blockers = build_blocker_masks(bitboard, i)
  *       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
  */
-    __pyx_f_6tablut_set_bit((&__pyx_v_bitboard), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 292, __pyx_L1_error)
+    __pyx_f_6tablut_set_bit((&__pyx_v_bitboard), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 319, __pyx_L1_error)
 
-    /* "tablut.pyx":293
+    /* "tablut.pyx":320
  *       clear_all(&bitboard)
  *       set_bit(&bitboard, i)
  *       blockers = build_blocker_masks(bitboard, i)             # <<<<<<<<<<<<<<
  *       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
- * """
+ * 
  */
-    __pyx_t_2 = __pyx_f_6tablut_build_blocker_masks(__pyx_v_bitboard, __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 293, __pyx_L1_error)
+    __pyx_t_2 = __pyx_f_6tablut_build_blocker_masks(__pyx_v_bitboard, __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 320, __pyx_L1_error)
     __pyx_v_blockers = __pyx_t_2;
 
-    /* "tablut.pyx":294
+    /* "tablut.pyx":321
  *       set_bit(&bitboard, i)
  *       blockers = build_blocker_masks(bitboard, i)
  *       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")             # <<<<<<<<<<<<<<
- * """
- * cdef void iterate_subsets(Bitboard mask):
+ * 
+ * cdef void print_relevant_bits():
  */
-    __pyx_t_3 = PyTuple_New(5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_3 = PyTuple_New(5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_t_4 = 0;
     __pyx_t_5 = 127;
@@ -4893,9 +6698,9 @@ static void __pyx_f_6tablut_print_masks(void) {
     __pyx_t_4 += 17;
     __Pyx_GIVEREF(__pyx_kp_u_Bitboard_low_0x);
     PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_kp_u_Bitboard_low_0x);
-    __pyx_t_6 = __Pyx_PyInt_From_uint64_t(__pyx_v_blockers.low); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyInt_From_uint64_t(__pyx_v_blockers.low); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = __Pyx_PyObject_Format(__pyx_t_6, __pyx_kp_u_016X); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_Format(__pyx_t_6, __pyx_kp_u_016X); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_t_5 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_7) > __pyx_t_5) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_7) : __pyx_t_5;
@@ -4907,9 +6712,9 @@ static void __pyx_f_6tablut_print_masks(void) {
     __pyx_t_4 += 11;
     __Pyx_GIVEREF(__pyx_kp_u_high_0x);
     PyTuple_SET_ITEM(__pyx_t_3, 2, __pyx_kp_u_high_0x);
-    __pyx_t_7 = __Pyx_PyInt_From_uint64_t(__pyx_v_blockers.high); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyInt_From_uint64_t(__pyx_v_blockers.high); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_6 = __Pyx_PyObject_Format(__pyx_t_7, __pyx_kp_u_016X); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_Format(__pyx_t_7, __pyx_kp_u_016X); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_t_5 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_6) > __pyx_t_5) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_6) : __pyx_t_5;
@@ -4921,21 +6726,21 @@ static void __pyx_f_6tablut_print_masks(void) {
     __pyx_t_4 += 2;
     __Pyx_GIVEREF(__pyx_kp_u__10);
     PyTuple_SET_ITEM(__pyx_t_3, 4, __pyx_kp_u__10);
-    __pyx_t_6 = __Pyx_PyUnicode_Join(__pyx_t_3, 5, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyUnicode_Join(__pyx_t_3, 5, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __pyx_t_3 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_6); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_6); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 321, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
 
-  /* "tablut.pyx":285
+  /* "tablut.pyx":309
  *     return blockers
  * 
  * cdef void print_masks():             # <<<<<<<<<<<<<<
- *     cdef Bitboard bitboard
- *     cdef Bitboard blockers
+ *     """
+ *     Used to print BLOCKER_MASK array.
  */
 
   /* function exit code */
@@ -4949,12 +6754,12 @@ static void __pyx_f_6tablut_print_masks(void) {
   __Pyx_RefNannyFinishContext();
 }
 
-/* "tablut.pyx":318
- * """
+/* "tablut.pyx":323
+ *       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
  * 
  * cdef void print_relevant_bits():             # <<<<<<<<<<<<<<
- *     cdef int i
- *     cdef Bitboard board = Bitboard(0,0)
+ *     """
+ *     Used to print BLOCKER_BITS array.
  */
 
 static void __pyx_f_6tablut_print_relevant_bits(void) {
@@ -4974,8 +6779,8 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("print_relevant_bits", 1);
 
-  /* "tablut.pyx":320
- * cdef void print_relevant_bits():
+  /* "tablut.pyx":328
+ *     """
  *     cdef int i
  *     cdef Bitboard board = Bitboard(0,0)             # <<<<<<<<<<<<<<
  *     cdef int count
@@ -4985,7 +6790,7 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
   __pyx_t_1.high = 0;
   __pyx_v_board = __pyx_t_1;
 
-  /* "tablut.pyx":323
+  /* "tablut.pyx":331
  *     cdef int count
  * 
  *     for i in range(81):             # <<<<<<<<<<<<<<
@@ -4995,62 +6800,62 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
   for (__pyx_t_2 = 0; __pyx_t_2 < 81; __pyx_t_2+=1) {
     __pyx_v_i = __pyx_t_2;
 
-    /* "tablut.pyx":324
+    /* "tablut.pyx":332
  * 
  *     for i in range(81):
  *         set_bit(&board, i)             # <<<<<<<<<<<<<<
  *         count = count_bits_board(build_blocker_masks(board, i))
  *         clear_bit(&board, i)
  */
-    __pyx_f_6tablut_set_bit((&__pyx_v_board), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 324, __pyx_L1_error)
+    __pyx_f_6tablut_set_bit((&__pyx_v_board), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 332, __pyx_L1_error)
 
-    /* "tablut.pyx":325
+    /* "tablut.pyx":333
  *     for i in range(81):
  *         set_bit(&board, i)
  *         count = count_bits_board(build_blocker_masks(board, i))             # <<<<<<<<<<<<<<
  *         clear_bit(&board, i)
  *         print(f'{count}, ', end='')
  */
-    __pyx_t_1 = __pyx_f_6tablut_build_blocker_masks(__pyx_v_board, __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 325, __pyx_L1_error)
-    __pyx_t_3 = __pyx_f_6tablut_count_bits_board(__pyx_t_1); if (unlikely(__pyx_t_3 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 325, __pyx_L1_error)
+    __pyx_t_1 = __pyx_f_6tablut_build_blocker_masks(__pyx_v_board, __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 333, __pyx_L1_error)
+    __pyx_t_3 = __pyx_f_6tablut_count_bits_board(__pyx_t_1); if (unlikely(__pyx_t_3 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 333, __pyx_L1_error)
     __pyx_v_count = __pyx_t_3;
 
-    /* "tablut.pyx":326
+    /* "tablut.pyx":334
  *         set_bit(&board, i)
  *         count = count_bits_board(build_blocker_masks(board, i))
  *         clear_bit(&board, i)             # <<<<<<<<<<<<<<
  *         print(f'{count}, ', end='')
  *         if (i + 1) % 9 == 0:
  */
-    __pyx_f_6tablut_clear_bit((&__pyx_v_board), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 326, __pyx_L1_error)
+    __pyx_f_6tablut_clear_bit((&__pyx_v_board), __pyx_v_i); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 334, __pyx_L1_error)
 
-    /* "tablut.pyx":327
+    /* "tablut.pyx":335
  *         count = count_bits_board(build_blocker_masks(board, i))
  *         clear_bit(&board, i)
  *         print(f'{count}, ', end='')             # <<<<<<<<<<<<<<
  *         if (i + 1) % 9 == 0:
  *             print()
  */
-    __pyx_t_4 = __Pyx_PyUnicode_From_int(__pyx_v_count, 0, ' ', 'd'); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 327, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyUnicode_From_int(__pyx_v_count, 0, ' ', 'd'); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 335, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_5 = __Pyx_PyUnicode_ConcatInPlace(__pyx_t_4, __pyx_kp_u__11); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 327, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyUnicode_ConcatInPlace(__pyx_t_4, __pyx_kp_u__11); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 335, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 327, __pyx_L1_error)
+    __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 335, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_GIVEREF(__pyx_t_5);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_5)) __PYX_ERR(0, 327, __pyx_L1_error);
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_5)) __PYX_ERR(0, 335, __pyx_L1_error);
     __pyx_t_5 = 0;
-    __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 327, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 335, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 327, __pyx_L1_error)
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 327, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_end, __pyx_kp_u__5) < 0) __PYX_ERR(0, 335, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_4, __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 335, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "tablut.pyx":328
+    /* "tablut.pyx":336
  *         clear_bit(&board, i)
  *         print(f'{count}, ', end='')
  *         if (i + 1) % 9 == 0:             # <<<<<<<<<<<<<<
@@ -5060,18 +6865,18 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
     __pyx_t_7 = (__Pyx_mod_long((__pyx_v_i + 1), 9) == 0);
     if (__pyx_t_7) {
 
-      /* "tablut.pyx":329
+      /* "tablut.pyx":337
  *         print(f'{count}, ', end='')
  *         if (i + 1) % 9 == 0:
  *             print()             # <<<<<<<<<<<<<<
  * 
  * #==============================================================================
  */
-      __pyx_t_6 = __Pyx_PyObject_CallNoArg(__pyx_builtin_print); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 329, __pyx_L1_error)
+      __pyx_t_6 = __Pyx_PyObject_CallNoArg(__pyx_builtin_print); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 337, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "tablut.pyx":328
+      /* "tablut.pyx":336
  *         clear_bit(&board, i)
  *         print(f'{count}, ', end='')
  *         if (i + 1) % 9 == 0:             # <<<<<<<<<<<<<<
@@ -5081,12 +6886,12 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
     }
   }
 
-  /* "tablut.pyx":318
- * """
+  /* "tablut.pyx":323
+ *       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
  * 
  * cdef void print_relevant_bits():             # <<<<<<<<<<<<<<
- *     cdef int i
- *     cdef Bitboard board = Bitboard(0,0)
+ *     """
+ *     Used to print BLOCKER_BITS array.
  */
 
   /* function exit code */
@@ -5100,86 +6905,160 @@ static void __pyx_f_6tablut_print_relevant_bits(void) {
   __Pyx_RefNannyFinishContext();
 }
 
-/* "tablut.pyx":337
+/* "tablut.pyx":345
  * # Random uint64 Generation
  * #----------------------------------------
  * cdef uint64_t random_u64():             # <<<<<<<<<<<<<<
- *     cdef uint64_t r = 0
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits
+ *     """
+ *     Returns a random 64-bit ULL.
  */
 
 static uint64_t __pyx_f_6tablut_random_u64(void) {
   uint64_t __pyx_v_r;
-  CYTHON_UNUSED long __pyx_v__;
   uint64_t __pyx_r;
-  long __pyx_t_1;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  PyObject *__pyx_t_2 = NULL;
+  PyObject *__pyx_t_3 = NULL;
+  uint64_t __pyx_t_4;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("random_u64", 1);
 
-  /* "tablut.pyx":338
- * #----------------------------------------
- * cdef uint64_t random_u64():
+  /* "tablut.pyx":351
+ *     - uses Python's random module, which returns 32 bit int. We call this twice, shifting the first random int over 32 bits for a total of 64
+ *     """
  *     cdef uint64_t r = 0             # <<<<<<<<<<<<<<
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits
- *         r = (r << 15) | (rand() & 0x7FFF)
+ *     r = (random.randint(0, 0xFFFFFFFF) << 32) | random.randint(0, 0xFFFFFFFF)
+ *     return r
  */
   __pyx_v_r = 0;
 
-  /* "tablut.pyx":339
- * cdef uint64_t random_u64():
+  /* "tablut.pyx":352
+ *     """
  *     cdef uint64_t r = 0
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits             # <<<<<<<<<<<<<<
- *         r = (r << 15) | (rand() & 0x7FFF)
- *     return r
- */
-  for (__pyx_t_1 = 0; __pyx_t_1 < 5; __pyx_t_1+=1) {
-    __pyx_v__ = __pyx_t_1;
-
-    /* "tablut.pyx":340
- *     cdef uint64_t r = 0
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits
- *         r = (r << 15) | (rand() & 0x7FFF)             # <<<<<<<<<<<<<<
+ *     r = (random.randint(0, 0xFFFFFFFF) << 32) | random.randint(0, 0xFFFFFFFF)             # <<<<<<<<<<<<<<
  *     return r
  * 
  */
-    __pyx_v_r = ((__pyx_v_r << 15) | (rand() & 0x7FFF));
-  }
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_random); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_randint); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_tuple__12, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_2 = __Pyx_PyInt_LshiftObjC(__pyx_t_1, __pyx_int_32, 32, 0, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_random); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_randint); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_tuple__12, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = PyNumber_Or(__pyx_t_2, __pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_4 = __Pyx_PyInt_As_uint64_t(__pyx_t_3); if (unlikely((__pyx_t_4 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_v_r = __pyx_t_4;
 
-  /* "tablut.pyx":341
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits
- *         r = (r << 15) | (rand() & 0x7FFF)
+  /* "tablut.pyx":353
+ *     cdef uint64_t r = 0
+ *     r = (random.randint(0, 0xFFFFFFFF) << 32) | random.randint(0, 0xFFFFFFFF)
  *     return r             # <<<<<<<<<<<<<<
  * 
- * #----------------------------------------
+ * cdef uint64_t random_uint64_fewbits():
  */
   __pyx_r = __pyx_v_r;
   goto __pyx_L0;
 
-  /* "tablut.pyx":337
+  /* "tablut.pyx":345
  * # Random uint64 Generation
  * #----------------------------------------
  * cdef uint64_t random_u64():             # <<<<<<<<<<<<<<
- *     cdef uint64_t r = 0
- *     for _ in range(5):  # We only need 5 iterations to fill 64 bits
+ *     """
+ *     Returns a random 64-bit ULL.
  */
 
   /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_AddTraceback("tablut.random_u64", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
+  __pyx_L0:;
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":355
+ *     return r
+ * 
+ * cdef uint64_t random_uint64_fewbits():             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns a sparse random 64-bit ULL.
+ */
+
+static uint64_t __pyx_f_6tablut_random_uint64_fewbits(void) {
+  uint64_t __pyx_r;
+  uint64_t __pyx_t_1;
+  uint64_t __pyx_t_2;
+  uint64_t __pyx_t_3;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+
+  /* "tablut.pyx":361
+ *     - we only want a few bits set, so 3 AND operations are performed. These magics are shown to be more successful.
+ *     """
+ *     return random_u64() & random_u64() & random_u64()             # <<<<<<<<<<<<<<
+ * 
+ * #----------------------------------------
+ */
+  __pyx_t_1 = __pyx_f_6tablut_random_u64(); if (unlikely(__pyx_t_1 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 361, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6tablut_random_u64(); if (unlikely(__pyx_t_2 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 361, __pyx_L1_error)
+  __pyx_t_3 = __pyx_f_6tablut_random_u64(); if (unlikely(__pyx_t_3 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 361, __pyx_L1_error)
+  __pyx_r = ((__pyx_t_1 & __pyx_t_2) & __pyx_t_3);
+  goto __pyx_L0;
+
+  /* "tablut.pyx":355
+ *     return r
+ * 
+ * cdef uint64_t random_uint64_fewbits():             # <<<<<<<<<<<<<<
+ *     """
+ *     Returns a sparse random 64-bit ULL.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_AddTraceback("tablut.random_uint64_fewbits", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
   __pyx_L0:;
   return __pyx_r;
 }
 
-/* "tablut.pyx":346
+/* "tablut.pyx":366
  * # Magic Transformation
  * #----------------------------------------
- * cdef int transform(uint64_t key, uint64_t magic, int bits):             # <<<<<<<<<<<<<<
- *     return (key * magic) >> (64 - bits)
- * 
+ * cdef uint64_t transform(uint64_t key, uint64_t magic, int bits):             # <<<<<<<<<<<<<<
+ *     """
+ *     Applies the magic multiplation and right shift, returns a 64-bit ULL index.
  */
 
-static int __pyx_f_6tablut_transform(uint64_t __pyx_v_key, uint64_t __pyx_v_magic, int __pyx_v_bits) {
-  int __pyx_r;
+static uint64_t __pyx_f_6tablut_transform(uint64_t __pyx_v_key, uint64_t __pyx_v_magic, int __pyx_v_bits) {
+  uint64_t __pyx_r;
 
-  /* "tablut.pyx":347
- * #----------------------------------------
- * cdef int transform(uint64_t key, uint64_t magic, int bits):
+  /* "tablut.pyx":370
+ *     Applies the magic multiplation and right shift, returns a 64-bit ULL index.
+ *     """
  *     return (key * magic) >> (64 - bits)             # <<<<<<<<<<<<<<
  * 
  * #-------------------------------------------------
@@ -5187,12 +7066,12 @@ static int __pyx_f_6tablut_transform(uint64_t __pyx_v_key, uint64_t __pyx_v_magi
   __pyx_r = ((__pyx_v_key * __pyx_v_magic) >> (64 - __pyx_v_bits));
   goto __pyx_L0;
 
-  /* "tablut.pyx":346
+  /* "tablut.pyx":366
  * # Magic Transformation
  * #----------------------------------------
- * cdef int transform(uint64_t key, uint64_t magic, int bits):             # <<<<<<<<<<<<<<
- *     return (key * magic) >> (64 - bits)
- * 
+ * cdef uint64_t transform(uint64_t key, uint64_t magic, int bits):             # <<<<<<<<<<<<<<
+ *     """
+ *     Applies the magic multiplation and right shift, returns a 64-bit ULL index.
  */
 
   /* function exit code */
@@ -5200,31 +7079,1714 @@ static int __pyx_f_6tablut_transform(uint64_t __pyx_v_key, uint64_t __pyx_v_magi
   return __pyx_r;
 }
 
-/* "tablut.pyx":385
- * #==============================================================================
+/* "tablut.pyx":380
+ *     size_t size
  * 
- * def print_blocker_masks():             # <<<<<<<<<<<<<<
- *     print_masks()
+ * cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):             # <<<<<<<<<<<<<<
+ *     """
+ *     Carry Rippler trick for finding subsets of a set. Returns next subset (Bitboard).
+ */
+
+static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_carry_rippler_next(struct __pyx_t_6tablut_Bitboard __pyx_v_subset, struct __pyx_t_6tablut_Bitboard __pyx_v_mask) {
+  struct __pyx_t_6tablut_Bitboard __pyx_v_next;
+  uint64_t __pyx_v_carry;
+  struct __pyx_t_6tablut_Bitboard __pyx_r;
+
+  /* "tablut.pyx":387
+ *     cdef uint64_t carry
  * 
+ *     next.low = (subset.low - mask.low) & mask.low             # <<<<<<<<<<<<<<
+ *     carry = (subset.low - mask.low) > subset.low
+ *     next.high = ((subset.high - carry) - mask.high) & mask.high
+ */
+  __pyx_v_next.low = ((__pyx_v_subset.low - __pyx_v_mask.low) & __pyx_v_mask.low);
+
+  /* "tablut.pyx":388
+ * 
+ *     next.low = (subset.low - mask.low) & mask.low
+ *     carry = (subset.low - mask.low) > subset.low             # <<<<<<<<<<<<<<
+ *     next.high = ((subset.high - carry) - mask.high) & mask.high
+ * 
+ */
+  __pyx_v_carry = ((__pyx_v_subset.low - __pyx_v_mask.low) > __pyx_v_subset.low);
+
+  /* "tablut.pyx":389
+ *     next.low = (subset.low - mask.low) & mask.low
+ *     carry = (subset.low - mask.low) > subset.low
+ *     next.high = ((subset.high - carry) - mask.high) & mask.high             # <<<<<<<<<<<<<<
+ * 
+ *     return next
+ */
+  __pyx_v_next.high = (((__pyx_v_subset.high - __pyx_v_carry) - __pyx_v_mask.high) & __pyx_v_mask.high);
+
+  /* "tablut.pyx":391
+ *     next.high = ((subset.high - carry) - mask.high) & mask.high
+ * 
+ *     return next             # <<<<<<<<<<<<<<
+ * 
+ * cdef BlockerMoveTables build_blocker_move_tables(int square):
+ */
+  __pyx_r = __pyx_v_next;
+  goto __pyx_L0;
+
+  /* "tablut.pyx":380
+ *     size_t size
+ * 
+ * cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):             # <<<<<<<<<<<<<<
+ *     """
+ *     Carry Rippler trick for finding subsets of a set. Returns next subset (Bitboard).
+ */
+
+  /* function exit code */
+  __pyx_L0:;
+  return __pyx_r;
+}
+
+/* "tablut.pyx":393
+ *     return next
+ * 
+ * cdef BlockerMoveTables build_blocker_move_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Building the Blocker / Move Tables. Returns constructed tables.
+ */
+
+static struct __pyx_t_6tablut_BlockerMoveTables __pyx_f_6tablut_build_blocker_move_tables(int __pyx_v_square) {
+  struct __pyx_t_6tablut_BlockerMoveTables __pyx_v_tables;
+  struct __pyx_t_6tablut_Bitboard __pyx_v_mask;
+  struct __pyx_t_6tablut_Bitboard __pyx_v_subset;
+  int __pyx_v_index;
+  struct __pyx_t_6tablut_BlockerMoveTables __pyx_r;
+  __Pyx_RefNannyDeclarations
+  struct __pyx_t_6tablut_Bitboard __pyx_t_1;
+  int __pyx_t_2;
+  int __pyx_t_3;
+  PyObject *__pyx_t_4 = NULL;
+  uint64_t __pyx_t_5;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("build_blocker_move_tables", 1);
+
+  /* "tablut.pyx":404
+ *     """
+ *     cdef BlockerMoveTables tables
+ *     cdef Bitboard mask = get_blocker_mask(square)             # <<<<<<<<<<<<<<
+ *     cdef Bitboard subset = Bitboard(0, 0)
+ *     cdef int index = 0
+ */
+  __pyx_t_1 = __pyx_f_6tablut_get_blocker_mask(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 404, __pyx_L1_error)
+  __pyx_v_mask = __pyx_t_1;
+
+  /* "tablut.pyx":405
+ *     cdef BlockerMoveTables tables
+ *     cdef Bitboard mask = get_blocker_mask(square)
+ *     cdef Bitboard subset = Bitboard(0, 0)             # <<<<<<<<<<<<<<
+ *     cdef int index = 0
+ * 
+ */
+  __pyx_t_1.low = 0;
+  __pyx_t_1.high = 0;
+  __pyx_v_subset = __pyx_t_1;
+
+  /* "tablut.pyx":406
+ *     cdef Bitboard mask = get_blocker_mask(square)
+ *     cdef Bitboard subset = Bitboard(0, 0)
+ *     cdef int index = 0             # <<<<<<<<<<<<<<
+ * 
+ *     tables.size = 1 << BLOCKER_BITS[square]
+ */
+  __pyx_v_index = 0;
+
+  /* "tablut.pyx":408
+ *     cdef int index = 0
+ * 
+ *     tables.size = 1 << BLOCKER_BITS[square]             # <<<<<<<<<<<<<<
+ *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
+ *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ */
+  __pyx_v_tables.size = (1 << (__pyx_v_6tablut_BLOCKER_BITS[__pyx_v_square]));
+
+  /* "tablut.pyx":409
+ * 
+ *     tables.size = 1 << BLOCKER_BITS[square]
+ *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))             # <<<<<<<<<<<<<<
+ *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ * 
+ */
+  __pyx_v_tables.blockers = ((uint64_t *)malloc((__pyx_v_tables.size * (sizeof(uint64_t)))));
+
+  /* "tablut.pyx":410
+ *     tables.size = 1 << BLOCKER_BITS[square]
+ *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
+ *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))             # <<<<<<<<<<<<<<
+ * 
+ *     if tables.blockers == NULL or tables.moves == NULL:
+ */
+  __pyx_v_tables.moves = ((struct __pyx_t_6tablut_Bitboard *)malloc((__pyx_v_tables.size * (sizeof(struct __pyx_t_6tablut_Bitboard)))));
+
+  /* "tablut.pyx":412
+ *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ * 
+ *     if tables.blockers == NULL or tables.moves == NULL:             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")
+ */
+  __pyx_t_3 = (__pyx_v_tables.blockers == NULL);
+  if (!__pyx_t_3) {
+  } else {
+    __pyx_t_2 = __pyx_t_3;
+    goto __pyx_L4_bool_binop_done;
+  }
+  __pyx_t_3 = (__pyx_v_tables.moves == NULL);
+  __pyx_t_2 = __pyx_t_3;
+  __pyx_L4_bool_binop_done:;
+  if (unlikely(__pyx_t_2)) {
+
+    /* "tablut.pyx":413
+ * 
+ *     if tables.blockers == NULL or tables.moves == NULL:
+ *         free_blocker_move_tables(&tables)             # <<<<<<<<<<<<<<
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")
+ * 
+ */
+    __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 413, __pyx_L1_error)
+
+    /* "tablut.pyx":414
+ *     if tables.blockers == NULL or tables.moves == NULL:
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")             # <<<<<<<<<<<<<<
+ * 
+ *     while True:
+ */
+    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 414, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __Pyx_Raise(__pyx_t_4, 0, 0, 0);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __PYX_ERR(0, 414, __pyx_L1_error)
+
+    /* "tablut.pyx":412
+ *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ * 
+ *     if tables.blockers == NULL or tables.moves == NULL:             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")
+ */
+  }
+
+  /* "tablut.pyx":416
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")
+ * 
+ *     while True:             # <<<<<<<<<<<<<<
+ *         tables.blockers[index] = merge(subset)
+ *         tables.moves[index] = find_moves_otf(subset, square)
+ */
+  while (1) {
+
+    /* "tablut.pyx":417
+ * 
+ *     while True:
+ *         tables.blockers[index] = merge(subset)             # <<<<<<<<<<<<<<
+ *         tables.moves[index] = find_moves_otf(subset, square)
+ *         index += 1
+ */
+    __pyx_t_5 = __pyx_f_6tablut_merge(__pyx_v_subset); if (unlikely(__pyx_t_5 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 417, __pyx_L1_error)
+    (__pyx_v_tables.blockers[__pyx_v_index]) = __pyx_t_5;
+
+    /* "tablut.pyx":418
+ *     while True:
+ *         tables.blockers[index] = merge(subset)
+ *         tables.moves[index] = find_moves_otf(subset, square)             # <<<<<<<<<<<<<<
+ *         index += 1
+ *         subset = carry_rippler_next(subset, mask)
+ */
+    __pyx_t_1 = __pyx_f_6tablut_find_moves_otf(__pyx_v_subset, __pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 418, __pyx_L1_error)
+    (__pyx_v_tables.moves[__pyx_v_index]) = __pyx_t_1;
+
+    /* "tablut.pyx":419
+ *         tables.blockers[index] = merge(subset)
+ *         tables.moves[index] = find_moves_otf(subset, square)
+ *         index += 1             # <<<<<<<<<<<<<<
+ *         subset = carry_rippler_next(subset, mask)
+ *         if subset.low == 0 and subset.high == 0:
+ */
+    __pyx_v_index = (__pyx_v_index + 1);
+
+    /* "tablut.pyx":420
+ *         tables.moves[index] = find_moves_otf(subset, square)
+ *         index += 1
+ *         subset = carry_rippler_next(subset, mask)             # <<<<<<<<<<<<<<
+ *         if subset.low == 0 and subset.high == 0:
+ *             break
+ */
+    __pyx_t_1 = __pyx_f_6tablut_carry_rippler_next(__pyx_v_subset, __pyx_v_mask); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 420, __pyx_L1_error)
+    __pyx_v_subset = __pyx_t_1;
+
+    /* "tablut.pyx":421
+ *         index += 1
+ *         subset = carry_rippler_next(subset, mask)
+ *         if subset.low == 0 and subset.high == 0:             # <<<<<<<<<<<<<<
+ *             break
+ * 
+ */
+    __pyx_t_3 = (__pyx_v_subset.low == 0);
+    if (__pyx_t_3) {
+    } else {
+      __pyx_t_2 = __pyx_t_3;
+      goto __pyx_L9_bool_binop_done;
+    }
+    __pyx_t_3 = (__pyx_v_subset.high == 0);
+    __pyx_t_2 = __pyx_t_3;
+    __pyx_L9_bool_binop_done:;
+    if (__pyx_t_2) {
+
+      /* "tablut.pyx":422
+ *         subset = carry_rippler_next(subset, mask)
+ *         if subset.low == 0 and subset.high == 0:
+ *             break             # <<<<<<<<<<<<<<
+ * 
+ *     return tables
+ */
+      goto __pyx_L7_break;
+
+      /* "tablut.pyx":421
+ *         index += 1
+ *         subset = carry_rippler_next(subset, mask)
+ *         if subset.low == 0 and subset.high == 0:             # <<<<<<<<<<<<<<
+ *             break
+ * 
+ */
+    }
+  }
+  __pyx_L7_break:;
+
+  /* "tablut.pyx":424
+ *             break
+ * 
+ *     return tables             # <<<<<<<<<<<<<<
+ * 
+ * cdef void free_blocker_move_tables(BlockerMoveTables* tables):
+ */
+  __pyx_r = __pyx_v_tables;
+  goto __pyx_L0;
+
+  /* "tablut.pyx":393
+ *     return next
+ * 
+ * cdef BlockerMoveTables build_blocker_move_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Building the Blocker / Move Tables. Returns constructed tables.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_AddTraceback("tablut.build_blocker_move_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_pretend_to_initialize(&__pyx_r);
+  __pyx_L0:;
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":426
+ *     return tables
+ * 
+ * cdef void free_blocker_move_tables(BlockerMoveTables* tables):             # <<<<<<<<<<<<<<
+ *     """
+ *     Sets Blocker / Move tables to NULL and frees allocated memory.
+ */
+
+static void __pyx_f_6tablut_free_blocker_move_tables(struct __pyx_t_6tablut_BlockerMoveTables *__pyx_v_tables) {
+  int __pyx_t_1;
+
+  /* "tablut.pyx":430
+ *     Sets Blocker / Move tables to NULL and frees allocated memory.
+ *     """
+ *     if tables.blockers != NULL:             # <<<<<<<<<<<<<<
+ *         free(tables.blockers)
+ *         tables.blockers = NULL
+ */
+  __pyx_t_1 = (__pyx_v_tables->blockers != NULL);
+  if (__pyx_t_1) {
+
+    /* "tablut.pyx":431
+ *     """
+ *     if tables.blockers != NULL:
+ *         free(tables.blockers)             # <<<<<<<<<<<<<<
+ *         tables.blockers = NULL
+ *     if tables.moves != NULL:
+ */
+    free(__pyx_v_tables->blockers);
+
+    /* "tablut.pyx":432
+ *     if tables.blockers != NULL:
+ *         free(tables.blockers)
+ *         tables.blockers = NULL             # <<<<<<<<<<<<<<
+ *     if tables.moves != NULL:
+ *         free(tables.moves)
+ */
+    __pyx_v_tables->blockers = NULL;
+
+    /* "tablut.pyx":430
+ *     Sets Blocker / Move tables to NULL and frees allocated memory.
+ *     """
+ *     if tables.blockers != NULL:             # <<<<<<<<<<<<<<
+ *         free(tables.blockers)
+ *         tables.blockers = NULL
+ */
+  }
+
+  /* "tablut.pyx":433
+ *         free(tables.blockers)
+ *         tables.blockers = NULL
+ *     if tables.moves != NULL:             # <<<<<<<<<<<<<<
+ *         free(tables.moves)
+ *         tables.moves = NULL
+ */
+  __pyx_t_1 = (__pyx_v_tables->moves != NULL);
+  if (__pyx_t_1) {
+
+    /* "tablut.pyx":434
+ *         tables.blockers = NULL
+ *     if tables.moves != NULL:
+ *         free(tables.moves)             # <<<<<<<<<<<<<<
+ *         tables.moves = NULL
+ *     tables.size = 0
+ */
+    free(__pyx_v_tables->moves);
+
+    /* "tablut.pyx":435
+ *     if tables.moves != NULL:
+ *         free(tables.moves)
+ *         tables.moves = NULL             # <<<<<<<<<<<<<<
+ *     tables.size = 0
+ * 
+ */
+    __pyx_v_tables->moves = NULL;
+
+    /* "tablut.pyx":433
+ *         free(tables.blockers)
+ *         tables.blockers = NULL
+ *     if tables.moves != NULL:             # <<<<<<<<<<<<<<
+ *         free(tables.moves)
+ *         tables.moves = NULL
+ */
+  }
+
+  /* "tablut.pyx":436
+ *         free(tables.moves)
+ *         tables.moves = NULL
+ *     tables.size = 0             # <<<<<<<<<<<<<<
+ * 
+ * cdef uint64_t find_magic(int square):
+ */
+  __pyx_v_tables->size = 0;
+
+  /* "tablut.pyx":426
+ *     return tables
+ * 
+ * cdef void free_blocker_move_tables(BlockerMoveTables* tables):             # <<<<<<<<<<<<<<
+ *     """
+ *     Sets Blocker / Move tables to NULL and frees allocated memory.
+ */
+
+  /* function exit code */
+}
+
+/* "tablut.pyx":438
+ *     tables.size = 0
+ * 
+ * cdef uint64_t find_magic(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Finds a magic number for a given square (0-80). Returns magic if succesful, else prints warning and returns an empty 64-bit ULL.
+ */
+
+static uint64_t __pyx_f_6tablut_find_magic(int __pyx_v_square) {
+  uint64_t __pyx_v_mask;
+  struct __pyx_t_6tablut_BlockerMoveTables __pyx_v_tables;
+  struct __pyx_t_6tablut_Bitboard *__pyx_v_used;
+  PyObject *__pyx_v_n_bits = 0;
+  CYTHON_UNUSED int __pyx_v_k;
+  int __pyx_v_i;
+  int __pyx_v_index;
+  int __pyx_v_fail;
+  int __pyx_v_counter;
+  int __pyx_v_max;
+  uint64_t __pyx_v_magic;
+  uint64_t __pyx_v_FAILED_MAGIC;
+  uint64_t __pyx_r;
+  __Pyx_RefNannyDeclarations
+  struct __pyx_t_6tablut_Bitboard __pyx_t_1;
+  uint64_t __pyx_t_2;
+  struct __pyx_t_6tablut_BlockerMoveTables __pyx_t_3;
+  PyObject *__pyx_t_4 = NULL;
+  int __pyx_t_5;
+  PyObject *__pyx_t_6 = NULL;
+  PyObject *__pyx_t_7 = NULL;
+  PyObject *__pyx_t_8 = NULL;
+  Py_ssize_t __pyx_t_9;
+  PyObject *(*__pyx_t_10)(PyObject *);
+  int __pyx_t_11;
+  size_t __pyx_t_12;
+  size_t __pyx_t_13;
+  int __pyx_t_14;
+  int __pyx_t_15;
+  Py_UCS4 __pyx_t_16;
+  char const *__pyx_t_17;
+  PyObject *__pyx_t_18 = NULL;
+  PyObject *__pyx_t_19 = NULL;
+  PyObject *__pyx_t_20 = NULL;
+  PyObject *__pyx_t_21 = NULL;
+  PyObject *__pyx_t_22 = NULL;
+  PyObject *__pyx_t_23 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("find_magic", 1);
+
+  /* "tablut.pyx":451
+ *     - If a magic succesfully hashes the entire array of possible blocker configurations, the magic is returned
+ *     """
+ *     cdef uint64_t mask = merge(get_blocker_mask(square))             # <<<<<<<<<<<<<<
+ *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ *     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ */
+  __pyx_t_1 = __pyx_f_6tablut_get_blocker_mask(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 451, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6tablut_merge(__pyx_t_1); if (unlikely(__pyx_t_2 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 451, __pyx_L1_error)
+  __pyx_v_mask = __pyx_t_2;
+
+  /* "tablut.pyx":452
+ *     """
+ *     cdef uint64_t mask = merge(get_blocker_mask(square))
+ *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)             # <<<<<<<<<<<<<<
+ *     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ *     cdef n_bits = BLOCKER_BITS[square]
+ */
+  __pyx_t_3 = __pyx_f_6tablut_build_blocker_move_tables(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 452, __pyx_L1_error)
+  __pyx_v_tables = __pyx_t_3;
+
+  /* "tablut.pyx":453
+ *     cdef uint64_t mask = merge(get_blocker_mask(square))
+ *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ *     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))             # <<<<<<<<<<<<<<
+ *     cdef n_bits = BLOCKER_BITS[square]
+ *     cdef int k, i, index, fail, counter, max
+ */
+  __pyx_v_used = ((struct __pyx_t_6tablut_Bitboard *)malloc((__pyx_v_tables.size * (sizeof(struct __pyx_t_6tablut_Bitboard)))));
+
+  /* "tablut.pyx":454
+ *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ *     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+ *     cdef n_bits = BLOCKER_BITS[square]             # <<<<<<<<<<<<<<
+ *     cdef int k, i, index, fail, counter, max
+ *     cdef uint64_t magic
+ */
+  __pyx_t_4 = __Pyx_PyInt_From_int((__pyx_v_6tablut_BLOCKER_BITS[__pyx_v_square])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 454, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_v_n_bits = __pyx_t_4;
+  __pyx_t_4 = 0;
+
+  /* "tablut.pyx":457
+ *     cdef int k, i, index, fail, counter, max
+ *     cdef uint64_t magic
+ *     cdef uint64_t FAILED_MAGIC = ZERO             # <<<<<<<<<<<<<<
+ * 
+ *     if used == NULL:
+ */
+  __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_ZERO); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 457, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_t_2 = __Pyx_PyInt_As_uint64_t(__pyx_t_4); if (unlikely((__pyx_t_2 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 457, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __pyx_v_FAILED_MAGIC = __pyx_t_2;
+
+  /* "tablut.pyx":459
+ *     cdef uint64_t FAILED_MAGIC = ZERO
+ * 
+ *     if used == NULL:             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for used array")
+ */
+  __pyx_t_5 = (__pyx_v_used == NULL);
+  if (unlikely(__pyx_t_5)) {
+
+    /* "tablut.pyx":460
+ * 
+ *     if used == NULL:
+ *         free_blocker_move_tables(&tables)             # <<<<<<<<<<<<<<
+ *         raise MemoryError("Failed to allocate memory for used array")
+ * 
+ */
+    __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 460, __pyx_L1_error)
+
+    /* "tablut.pyx":461
+ *     if used == NULL:
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for used array")             # <<<<<<<<<<<<<<
+ * 
+ *     try:
+ */
+    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__14, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __Pyx_Raise(__pyx_t_4, 0, 0, 0);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __PYX_ERR(0, 461, __pyx_L1_error)
+
+    /* "tablut.pyx":459
+ *     cdef uint64_t FAILED_MAGIC = ZERO
+ * 
+ *     if used == NULL:             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for used array")
+ */
+  }
+
+  /* "tablut.pyx":463
+ *         raise MemoryError("Failed to allocate memory for used array")
+ * 
+ *     try:             # <<<<<<<<<<<<<<
+ *         max = 0
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
+ */
+  /*try:*/ {
+
+    /* "tablut.pyx":464
+ * 
+ *     try:
+ *         max = 0             # <<<<<<<<<<<<<<
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
+ *             magic = random_uint64_fewbits()
+ */
+    __pyx_v_max = 0;
+
+    /* "tablut.pyx":465
+ *     try:
+ *         max = 0
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):             # <<<<<<<<<<<<<<
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+ */
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_tqdm); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 465, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_range, __pyx_tuple__15, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 465, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_7 = PyTuple_New(1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 465, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_7);
+    __Pyx_GIVEREF(__pyx_t_6);
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_6)) __PYX_ERR(0, 465, __pyx_L5_error);
+    __pyx_t_6 = 0;
+    __pyx_t_6 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 465, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_desc, __pyx_kp_u_Testing_Magic) < 0) __PYX_ERR(0, 465, __pyx_L5_error)
+    if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_unit, __pyx_n_u_magic) < 0) __PYX_ERR(0, 465, __pyx_L5_error)
+    __pyx_t_8 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_7, __pyx_t_6); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 465, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+    if (likely(PyList_CheckExact(__pyx_t_8)) || PyTuple_CheckExact(__pyx_t_8)) {
+      __pyx_t_6 = __pyx_t_8; __Pyx_INCREF(__pyx_t_6);
+      __pyx_t_9 = 0;
+      __pyx_t_10 = NULL;
+    } else {
+      __pyx_t_9 = -1; __pyx_t_6 = PyObject_GetIter(__pyx_t_8); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 465, __pyx_L5_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __pyx_t_10 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_6); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 465, __pyx_L5_error)
+    }
+    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+    for (;;) {
+      if (likely(!__pyx_t_10)) {
+        if (likely(PyList_CheckExact(__pyx_t_6))) {
+          {
+            Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_6);
+            #if !CYTHON_ASSUME_SAFE_MACROS
+            if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 465, __pyx_L5_error)
+            #endif
+            if (__pyx_t_9 >= __pyx_temp) break;
+          }
+          #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+          __pyx_t_8 = PyList_GET_ITEM(__pyx_t_6, __pyx_t_9); __Pyx_INCREF(__pyx_t_8); __pyx_t_9++; if (unlikely((0 < 0))) __PYX_ERR(0, 465, __pyx_L5_error)
+          #else
+          __pyx_t_8 = __Pyx_PySequence_ITEM(__pyx_t_6, __pyx_t_9); __pyx_t_9++; if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 465, __pyx_L5_error)
+          __Pyx_GOTREF(__pyx_t_8);
+          #endif
+        } else {
+          {
+            Py_ssize_t __pyx_temp = __Pyx_PyTuple_GET_SIZE(__pyx_t_6);
+            #if !CYTHON_ASSUME_SAFE_MACROS
+            if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 465, __pyx_L5_error)
+            #endif
+            if (__pyx_t_9 >= __pyx_temp) break;
+          }
+          #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+          __pyx_t_8 = PyTuple_GET_ITEM(__pyx_t_6, __pyx_t_9); __Pyx_INCREF(__pyx_t_8); __pyx_t_9++; if (unlikely((0 < 0))) __PYX_ERR(0, 465, __pyx_L5_error)
+          #else
+          __pyx_t_8 = __Pyx_PySequence_ITEM(__pyx_t_6, __pyx_t_9); __pyx_t_9++; if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 465, __pyx_L5_error)
+          __Pyx_GOTREF(__pyx_t_8);
+          #endif
+        }
+      } else {
+        __pyx_t_8 = __pyx_t_10(__pyx_t_6);
+        if (unlikely(!__pyx_t_8)) {
+          PyObject* exc_type = PyErr_Occurred();
+          if (exc_type) {
+            if (likely(__Pyx_PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration))) PyErr_Clear();
+            else __PYX_ERR(0, 465, __pyx_L5_error)
+          }
+          break;
+        }
+        __Pyx_GOTREF(__pyx_t_8);
+      }
+      __pyx_t_11 = __Pyx_PyInt_As_int(__pyx_t_8); if (unlikely((__pyx_t_11 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 465, __pyx_L5_error)
+      __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+      __pyx_v_k = __pyx_t_11;
+
+      /* "tablut.pyx":466
+ *         max = 0
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
+ *             magic = random_uint64_fewbits()             # <<<<<<<<<<<<<<
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+ *                 continue
+ */
+      __pyx_t_2 = __pyx_f_6tablut_random_uint64_fewbits(); if (unlikely(__pyx_t_2 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 466, __pyx_L5_error)
+      __pyx_v_magic = __pyx_t_2;
+
+      /* "tablut.pyx":467
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:             # <<<<<<<<<<<<<<
+ *                 continue
+ * 
+ */
+      __pyx_t_8 = __Pyx_PyInt_From_uint64_t((__pyx_v_mask * __pyx_v_magic)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 467, __pyx_L5_error)
+      __Pyx_GOTREF(__pyx_t_8);
+      __pyx_t_7 = PyNumber_And(__pyx_t_8, __pyx_int_0xff00000000000000); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 467, __pyx_L5_error)
+      __Pyx_GOTREF(__pyx_t_7);
+      __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+      __pyx_t_2 = __Pyx_PyInt_As_uint64_t(__pyx_t_7); if (unlikely((__pyx_t_2 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 467, __pyx_L5_error)
+      __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+      __pyx_t_11 = __pyx_f_6tablut_count_bits(__pyx_t_2); if (unlikely(__pyx_t_11 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 467, __pyx_L5_error)
+      __pyx_t_5 = (__pyx_t_11 < 6);
+      if (__pyx_t_5) {
+
+        /* "tablut.pyx":468
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+ *                 continue             # <<<<<<<<<<<<<<
+ * 
+ *             # Reset the used array
+ */
+        goto __pyx_L7_continue;
+
+        /* "tablut.pyx":467
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:             # <<<<<<<<<<<<<<
+ *                 continue
+ * 
+ */
+      }
+
+      /* "tablut.pyx":471
+ * 
+ *             # Reset the used array
+ *             for i in range(tables.size):             # <<<<<<<<<<<<<<
+ *                 used[i] = EMPTY_BITBOARD
+ * 
+ */
+      __pyx_t_12 = __pyx_v_tables.size;
+      __pyx_t_13 = __pyx_t_12;
+      for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_13; __pyx_t_11+=1) {
+        __pyx_v_i = __pyx_t_11;
+
+        /* "tablut.pyx":472
+ *             # Reset the used array
+ *             for i in range(tables.size):
+ *                 used[i] = EMPTY_BITBOARD             # <<<<<<<<<<<<<<
+ * 
+ *             fail, counter = 0, 0
+ */
+        (__pyx_v_used[__pyx_v_i]) = __pyx_v_6tablut_EMPTY_BITBOARD;
+      }
+
+      /* "tablut.pyx":474
+ *                 used[i] = EMPTY_BITBOARD
+ * 
+ *             fail, counter = 0, 0             # <<<<<<<<<<<<<<
+ *             while fail == 0 and counter < tables.size:
+ *                 index = transform(tables.blockers[counter], magic, n_bits)
+ */
+      __pyx_t_11 = 0;
+      __pyx_t_14 = 0;
+      __pyx_v_fail = __pyx_t_11;
+      __pyx_v_counter = __pyx_t_14;
+
+      /* "tablut.pyx":475
+ * 
+ *             fail, counter = 0, 0
+ *             while fail == 0 and counter < tables.size:             # <<<<<<<<<<<<<<
+ *                 index = transform(tables.blockers[counter], magic, n_bits)
+ *                 if is_board_empty(used[index]):
+ */
+      while (1) {
+        __pyx_t_15 = (__pyx_v_fail == 0);
+        if (__pyx_t_15) {
+        } else {
+          __pyx_t_5 = __pyx_t_15;
+          goto __pyx_L14_bool_binop_done;
+        }
+        __pyx_t_15 = (__pyx_v_counter < __pyx_v_tables.size);
+        __pyx_t_5 = __pyx_t_15;
+        __pyx_L14_bool_binop_done:;
+        if (!__pyx_t_5) break;
+
+        /* "tablut.pyx":476
+ *             fail, counter = 0, 0
+ *             while fail == 0 and counter < tables.size:
+ *                 index = transform(tables.blockers[counter], magic, n_bits)             # <<<<<<<<<<<<<<
+ *                 if is_board_empty(used[index]):
+ *                     used[index] = tables.moves[counter]
+ */
+        __pyx_t_14 = __Pyx_PyInt_As_int(__pyx_v_n_bits); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 476, __pyx_L5_error)
+        __pyx_t_2 = __pyx_f_6tablut_transform((__pyx_v_tables.blockers[__pyx_v_counter]), __pyx_v_magic, __pyx_t_14); if (unlikely(__pyx_t_2 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 476, __pyx_L5_error)
+        __pyx_v_index = __pyx_t_2;
+
+        /* "tablut.pyx":477
+ *             while fail == 0 and counter < tables.size:
+ *                 index = transform(tables.blockers[counter], magic, n_bits)
+ *                 if is_board_empty(used[index]):             # <<<<<<<<<<<<<<
+ *                     used[index] = tables.moves[counter]
+ *                 elif not same_board(used[index], tables.moves[counter]):
+ */
+        __pyx_t_7 = __pyx_f_6tablut_is_board_empty((__pyx_v_used[__pyx_v_index])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 477, __pyx_L5_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely((__pyx_t_5 < 0))) __PYX_ERR(0, 477, __pyx_L5_error)
+        __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+        if (__pyx_t_5) {
+
+          /* "tablut.pyx":478
+ *                 index = transform(tables.blockers[counter], magic, n_bits)
+ *                 if is_board_empty(used[index]):
+ *                     used[index] = tables.moves[counter]             # <<<<<<<<<<<<<<
+ *                 elif not same_board(used[index], tables.moves[counter]):
+ *                     fail = 1
+ */
+          (__pyx_v_used[__pyx_v_index]) = (__pyx_v_tables.moves[__pyx_v_counter]);
+
+          /* "tablut.pyx":477
+ *             while fail == 0 and counter < tables.size:
+ *                 index = transform(tables.blockers[counter], magic, n_bits)
+ *                 if is_board_empty(used[index]):             # <<<<<<<<<<<<<<
+ *                     used[index] = tables.moves[counter]
+ *                 elif not same_board(used[index], tables.moves[counter]):
+ */
+          goto __pyx_L16;
+        }
+
+        /* "tablut.pyx":479
+ *                 if is_board_empty(used[index]):
+ *                     used[index] = tables.moves[counter]
+ *                 elif not same_board(used[index], tables.moves[counter]):             # <<<<<<<<<<<<<<
+ *                     fail = 1
+ *                 counter += 1
+ */
+        __pyx_t_7 = __pyx_f_6tablut_same_board((__pyx_v_used[__pyx_v_index]), (__pyx_v_tables.moves[__pyx_v_counter])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 479, __pyx_L5_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely((__pyx_t_5 < 0))) __PYX_ERR(0, 479, __pyx_L5_error)
+        __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+        __pyx_t_15 = (!__pyx_t_5);
+        if (__pyx_t_15) {
+
+          /* "tablut.pyx":480
+ *                     used[index] = tables.moves[counter]
+ *                 elif not same_board(used[index], tables.moves[counter]):
+ *                     fail = 1             # <<<<<<<<<<<<<<
+ *                 counter += 1
+ *                 if counter > max:
+ */
+          __pyx_v_fail = 1;
+
+          /* "tablut.pyx":479
+ *                 if is_board_empty(used[index]):
+ *                     used[index] = tables.moves[counter]
+ *                 elif not same_board(used[index], tables.moves[counter]):             # <<<<<<<<<<<<<<
+ *                     fail = 1
+ *                 counter += 1
+ */
+        }
+        __pyx_L16:;
+
+        /* "tablut.pyx":481
+ *                 elif not same_board(used[index], tables.moves[counter]):
+ *                     fail = 1
+ *                 counter += 1             # <<<<<<<<<<<<<<
+ *                 if counter > max:
+ *                     max = counter
+ */
+        __pyx_v_counter = (__pyx_v_counter + 1);
+
+        /* "tablut.pyx":482
+ *                     fail = 1
+ *                 counter += 1
+ *                 if counter > max:             # <<<<<<<<<<<<<<
+ *                     max = counter
+ * 
+ */
+        __pyx_t_15 = (__pyx_v_counter > __pyx_v_max);
+        if (__pyx_t_15) {
+
+          /* "tablut.pyx":483
+ *                 counter += 1
+ *                 if counter > max:
+ *                     max = counter             # <<<<<<<<<<<<<<
+ * 
+ * 
+ */
+          __pyx_v_max = __pyx_v_counter;
+
+          /* "tablut.pyx":482
+ *                     fail = 1
+ *                 counter += 1
+ *                 if counter > max:             # <<<<<<<<<<<<<<
+ *                     max = counter
+ * 
+ */
+        }
+      }
+
+      /* "tablut.pyx":486
+ * 
+ * 
+ *             if fail == 0:             # <<<<<<<<<<<<<<
+ *                 return magic
+ * 
+ */
+      __pyx_t_15 = (__pyx_v_fail == 0);
+      if (__pyx_t_15) {
+
+        /* "tablut.pyx":487
+ * 
+ *             if fail == 0:
+ *                 return magic             # <<<<<<<<<<<<<<
+ * 
+ *         print(f"***Failed to find Magic for square {square}. Best Magic passed first {max} entries ({max/tables.size})***")
+ */
+        __pyx_r = __pyx_v_magic;
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+        goto __pyx_L4_return;
+
+        /* "tablut.pyx":486
+ * 
+ * 
+ *             if fail == 0:             # <<<<<<<<<<<<<<
+ *                 return magic
+ * 
+ */
+      }
+
+      /* "tablut.pyx":465
+ *     try:
+ *         max = 0
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):             # <<<<<<<<<<<<<<
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+ */
+      __pyx_L7_continue:;
+    }
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "tablut.pyx":489
+ *                 return magic
+ * 
+ *         print(f"***Failed to find Magic for square {square}. Best Magic passed first {max} entries ({max/tables.size})***")             # <<<<<<<<<<<<<<
+ *         return FAILED_MAGIC
+ *     finally:
+ */
+    __pyx_t_6 = PyTuple_New(7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_9 = 0;
+    __pyx_t_16 = 127;
+    __Pyx_INCREF(__pyx_kp_u_Failed_to_find_Magic_for_square);
+    __pyx_t_9 += 35;
+    __Pyx_GIVEREF(__pyx_kp_u_Failed_to_find_Magic_for_square);
+    PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_kp_u_Failed_to_find_Magic_for_square);
+    __pyx_t_7 = __Pyx_PyUnicode_From_int(__pyx_v_square, 0, ' ', 'd'); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_7);
+    __pyx_t_9 += __Pyx_PyUnicode_GET_LENGTH(__pyx_t_7);
+    __Pyx_GIVEREF(__pyx_t_7);
+    PyTuple_SET_ITEM(__pyx_t_6, 1, __pyx_t_7);
+    __pyx_t_7 = 0;
+    __Pyx_INCREF(__pyx_kp_u_Best_Magic_passed_first);
+    __pyx_t_9 += 26;
+    __Pyx_GIVEREF(__pyx_kp_u_Best_Magic_passed_first);
+    PyTuple_SET_ITEM(__pyx_t_6, 2, __pyx_kp_u_Best_Magic_passed_first);
+    __pyx_t_7 = __Pyx_PyUnicode_From_int(__pyx_v_max, 0, ' ', 'd'); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_7);
+    __pyx_t_9 += __Pyx_PyUnicode_GET_LENGTH(__pyx_t_7);
+    __Pyx_GIVEREF(__pyx_t_7);
+    PyTuple_SET_ITEM(__pyx_t_6, 3, __pyx_t_7);
+    __pyx_t_7 = 0;
+    __Pyx_INCREF(__pyx_kp_u_entries);
+    __pyx_t_9 += 10;
+    __Pyx_GIVEREF(__pyx_kp_u_entries);
+    PyTuple_SET_ITEM(__pyx_t_6, 4, __pyx_kp_u_entries);
+    if (unlikely(__pyx_v_tables.size == 0)) {
+      PyErr_SetString(PyExc_ZeroDivisionError, "float division");
+      __PYX_ERR(0, 489, __pyx_L5_error)
+    }
+    __pyx_t_7 = PyFloat_FromDouble((((double)__pyx_v_max) / ((double)__pyx_v_tables.size))); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_7);
+    __pyx_t_8 = __Pyx_PyObject_FormatSimple(__pyx_t_7, __pyx_empty_unicode); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+    __pyx_t_16 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_8) > __pyx_t_16) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_8) : __pyx_t_16;
+    __pyx_t_9 += __Pyx_PyUnicode_GET_LENGTH(__pyx_t_8);
+    __Pyx_GIVEREF(__pyx_t_8);
+    PyTuple_SET_ITEM(__pyx_t_6, 5, __pyx_t_8);
+    __pyx_t_8 = 0;
+    __Pyx_INCREF(__pyx_kp_u__16);
+    __pyx_t_9 += 4;
+    __Pyx_GIVEREF(__pyx_kp_u__16);
+    PyTuple_SET_ITEM(__pyx_t_6, 6, __pyx_kp_u__16);
+    __pyx_t_8 = __Pyx_PyUnicode_Join(__pyx_t_6, 7, __pyx_t_9, __pyx_t_16); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+    __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_8); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 489, __pyx_L5_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "tablut.pyx":490
+ * 
+ *         print(f"***Failed to find Magic for square {square}. Best Magic passed first {max} entries ({max/tables.size})***")
+ *         return FAILED_MAGIC             # <<<<<<<<<<<<<<
+ *     finally:
+ *         free(used)
+ */
+    __pyx_r = __pyx_v_FAILED_MAGIC;
+    goto __pyx_L4_return;
+  }
+
+  /* "tablut.pyx":492
+ *         return FAILED_MAGIC
+ *     finally:
+ *         free(used)             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ * 
+ */
+  /*finally:*/ {
+    __pyx_L5_error:;
+    /*exception exit:*/{
+      __Pyx_PyThreadState_declare
+      __Pyx_PyThreadState_assign
+      __pyx_t_18 = 0; __pyx_t_19 = 0; __pyx_t_20 = 0; __pyx_t_21 = 0; __pyx_t_22 = 0; __pyx_t_23 = 0;
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
+      __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
+      __Pyx_XDECREF(__pyx_t_8); __pyx_t_8 = 0;
+      if (PY_MAJOR_VERSION >= 3) __Pyx_ExceptionSwap(&__pyx_t_21, &__pyx_t_22, &__pyx_t_23);
+      if ((PY_MAJOR_VERSION < 3) || unlikely(__Pyx_GetException(&__pyx_t_18, &__pyx_t_19, &__pyx_t_20) < 0)) __Pyx_ErrFetch(&__pyx_t_18, &__pyx_t_19, &__pyx_t_20);
+      __Pyx_XGOTREF(__pyx_t_18);
+      __Pyx_XGOTREF(__pyx_t_19);
+      __Pyx_XGOTREF(__pyx_t_20);
+      __Pyx_XGOTREF(__pyx_t_21);
+      __Pyx_XGOTREF(__pyx_t_22);
+      __Pyx_XGOTREF(__pyx_t_23);
+      __pyx_t_14 = __pyx_lineno; __pyx_t_11 = __pyx_clineno; __pyx_t_17 = __pyx_filename;
+      {
+        free(__pyx_v_used);
+
+        /* "tablut.pyx":493
+ *     finally:
+ *         free(used)
+ *         free_blocker_move_tables(&tables)             # <<<<<<<<<<<<<<
+ * 
+ * def find_magics(squares=None):
+ */
+        __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 493, __pyx_L21_error)
+      }
+      if (PY_MAJOR_VERSION >= 3) {
+        __Pyx_XGIVEREF(__pyx_t_21);
+        __Pyx_XGIVEREF(__pyx_t_22);
+        __Pyx_XGIVEREF(__pyx_t_23);
+        __Pyx_ExceptionReset(__pyx_t_21, __pyx_t_22, __pyx_t_23);
+      }
+      __Pyx_XGIVEREF(__pyx_t_18);
+      __Pyx_XGIVEREF(__pyx_t_19);
+      __Pyx_XGIVEREF(__pyx_t_20);
+      __Pyx_ErrRestore(__pyx_t_18, __pyx_t_19, __pyx_t_20);
+      __pyx_t_18 = 0; __pyx_t_19 = 0; __pyx_t_20 = 0; __pyx_t_21 = 0; __pyx_t_22 = 0; __pyx_t_23 = 0;
+      __pyx_lineno = __pyx_t_14; __pyx_clineno = __pyx_t_11; __pyx_filename = __pyx_t_17;
+      goto __pyx_L1_error;
+      __pyx_L21_error:;
+      if (PY_MAJOR_VERSION >= 3) {
+        __Pyx_XGIVEREF(__pyx_t_21);
+        __Pyx_XGIVEREF(__pyx_t_22);
+        __Pyx_XGIVEREF(__pyx_t_23);
+        __Pyx_ExceptionReset(__pyx_t_21, __pyx_t_22, __pyx_t_23);
+      }
+      __Pyx_XDECREF(__pyx_t_18); __pyx_t_18 = 0;
+      __Pyx_XDECREF(__pyx_t_19); __pyx_t_19 = 0;
+      __Pyx_XDECREF(__pyx_t_20); __pyx_t_20 = 0;
+      __pyx_t_21 = 0; __pyx_t_22 = 0; __pyx_t_23 = 0;
+      goto __pyx_L1_error;
+    }
+    __pyx_L4_return: {
+      __pyx_t_2 = __pyx_r;
+
+      /* "tablut.pyx":492
+ *         return FAILED_MAGIC
+ *     finally:
+ *         free(used)             # <<<<<<<<<<<<<<
+ *         free_blocker_move_tables(&tables)
+ * 
+ */
+      free(__pyx_v_used);
+
+      /* "tablut.pyx":493
+ *     finally:
+ *         free(used)
+ *         free_blocker_move_tables(&tables)             # <<<<<<<<<<<<<<
+ * 
+ * def find_magics(squares=None):
+ */
+      __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 493, __pyx_L1_error)
+      __pyx_r = __pyx_t_2;
+      goto __pyx_L0;
+    }
+  }
+
+  /* "tablut.pyx":438
+ *     tables.size = 0
+ * 
+ * cdef uint64_t find_magic(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Finds a magic number for a given square (0-80). Returns magic if succesful, else prints warning and returns an empty 64-bit ULL.
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_7);
+  __Pyx_XDECREF(__pyx_t_8);
+  __Pyx_AddTraceback("tablut.find_magic", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = -1;
+  __pyx_L0:;
+  __Pyx_XDECREF(__pyx_v_n_bits);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":495
+ *         free_blocker_move_tables(&tables)
+ * 
+ * def find_magics(squares=None):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-accessible function to print magic numbers for specified board squares.
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6tablut_5print_blocker_masks(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
-static PyMethodDef __pyx_mdef_6tablut_5print_blocker_masks = {"print_blocker_masks", (PyCFunction)__pyx_pw_6tablut_5print_blocker_masks, METH_NOARGS, 0};
-static PyObject *__pyx_pw_6tablut_5print_blocker_masks(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
+static PyObject *__pyx_pw_6tablut_5find_magics(PyObject *__pyx_self, 
+#if CYTHON_METH_FASTCALL
+PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
+#else
+PyObject *__pyx_args, PyObject *__pyx_kwds
+#endif
+); /*proto*/
+PyDoc_STRVAR(__pyx_doc_6tablut_4find_magics, "\n    Python-accessible function to print magic numbers for specified board squares.\n\n    :param squares: List or array of square indices to find magics for. If None, finds magics for all squares.\n    ");
+static PyMethodDef __pyx_mdef_6tablut_5find_magics = {"find_magics", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6tablut_5find_magics, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6tablut_4find_magics};
+static PyObject *__pyx_pw_6tablut_5find_magics(PyObject *__pyx_self, 
+#if CYTHON_METH_FASTCALL
+PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
+#else
+PyObject *__pyx_args, PyObject *__pyx_kwds
+#endif
+) {
+  PyObject *__pyx_v_squares = 0;
+  #if !CYTHON_METH_FASTCALL
+  CYTHON_UNUSED Py_ssize_t __pyx_nargs;
+  #endif
+  CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
+  PyObject* values[1] = {0};
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  PyObject *__pyx_r = 0;
+  __Pyx_RefNannyDeclarations
+  __Pyx_RefNannySetupContext("find_magics (wrapper)", 0);
+  #if !CYTHON_METH_FASTCALL
+  #if CYTHON_ASSUME_SAFE_MACROS
+  __pyx_nargs = PyTuple_GET_SIZE(__pyx_args);
+  #else
+  __pyx_nargs = PyTuple_Size(__pyx_args); if (unlikely(__pyx_nargs < 0)) return NULL;
+  #endif
+  #endif
+  __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
+  {
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_squares,0};
+    values[0] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)Py_None));
+    if (__pyx_kwds) {
+      Py_ssize_t kw_args;
+      switch (__pyx_nargs) {
+        case  1: values[0] = __Pyx_Arg_FASTCALL(__pyx_args, 0);
+        CYTHON_FALLTHROUGH;
+        case  0: break;
+        default: goto __pyx_L5_argtuple_error;
+      }
+      kw_args = __Pyx_NumKwargs_FASTCALL(__pyx_kwds);
+      switch (__pyx_nargs) {
+        case  0:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_squares);
+          if (value) { values[0] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 495, __pyx_L3_error)
+        }
+      }
+      if (unlikely(kw_args > 0)) {
+        const Py_ssize_t kwd_pos_args = __pyx_nargs;
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "find_magics") < 0)) __PYX_ERR(0, 495, __pyx_L3_error)
+      }
+    } else {
+      switch (__pyx_nargs) {
+        case  1: values[0] = __Pyx_Arg_FASTCALL(__pyx_args, 0);
+        CYTHON_FALLTHROUGH;
+        case  0: break;
+        default: goto __pyx_L5_argtuple_error;
+      }
+    }
+    __pyx_v_squares = values[0];
+  }
+  goto __pyx_L6_skip;
+  __pyx_L5_argtuple_error:;
+  __Pyx_RaiseArgtupleInvalid("find_magics", 0, 0, 1, __pyx_nargs); __PYX_ERR(0, 495, __pyx_L3_error)
+  __pyx_L6_skip:;
+  goto __pyx_L4_argument_unpacking_done;
+  __pyx_L3_error:;
+  {
+    Py_ssize_t __pyx_temp;
+    for (__pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
+      __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
+    }
+  }
+  __Pyx_AddTraceback("tablut.find_magics", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_RefNannyFinishContext();
+  return NULL;
+  __pyx_L4_argument_unpacking_done:;
+  __pyx_r = __pyx_pf_6tablut_4find_magics(__pyx_self, __pyx_v_squares);
+
+  /* function exit code */
+  {
+    Py_ssize_t __pyx_temp;
+    for (__pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
+      __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
+    }
+  }
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+static PyObject *__pyx_pf_6tablut_4find_magics(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_squares) {
+  arrayobject *__pyx_v_square_array = 0;
+  int __pyx_v_square;
+  int __pyx_v_i;
+  uint64_t __pyx_v_magic;
+  PyObject *__pyx_v_magics = NULL;
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  int __pyx_t_1;
+  PyObject *__pyx_t_2 = NULL;
+  PyObject *__pyx_t_3 = NULL;
+  int __pyx_t_4;
+  Py_ssize_t __pyx_t_5;
+  Py_ssize_t __pyx_t_6;
+  int __pyx_t_7;
+  int __pyx_t_8;
+  uint64_t __pyx_t_9;
+  int __pyx_t_10;
+  PyObject *__pyx_t_11 = NULL;
+  PyObject *__pyx_t_12 = NULL;
+  Py_ssize_t __pyx_t_13;
+  Py_UCS4 __pyx_t_14;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("find_magics", 0);
+  __Pyx_INCREF(__pyx_v_squares);
+
+  /* "tablut.pyx":505
+ *     cdef uint64_t magic
+ * 
+ *     if squares is None:             # <<<<<<<<<<<<<<
+ *         squares = range(81)
+ * 
+ */
+  __pyx_t_1 = (__pyx_v_squares == Py_None);
+  if (__pyx_t_1) {
+
+    /* "tablut.pyx":506
+ * 
+ *     if squares is None:
+ *         squares = range(81)             # <<<<<<<<<<<<<<
+ * 
+ *     square_array = array.array('i', squares)
+ */
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_range, __pyx_tuple__17, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 506, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF_SET(__pyx_v_squares, __pyx_t_2);
+    __pyx_t_2 = 0;
+
+    /* "tablut.pyx":505
+ *     cdef uint64_t magic
+ * 
+ *     if squares is None:             # <<<<<<<<<<<<<<
+ *         squares = range(81)
+ * 
+ */
+  }
+
+  /* "tablut.pyx":508
+ *         squares = range(81)
+ * 
+ *     square_array = array.array('i', squares)             # <<<<<<<<<<<<<<
+ * 
+ *     if min(square_array) < 0 or max(square_array) > 80:
+ */
+  __pyx_t_2 = PyTuple_New(2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 508, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_INCREF(__pyx_n_u_i);
+  __Pyx_GIVEREF(__pyx_n_u_i);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_n_u_i)) __PYX_ERR(0, 508, __pyx_L1_error);
+  __Pyx_INCREF(__pyx_v_squares);
+  __Pyx_GIVEREF(__pyx_v_squares);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_v_squares)) __PYX_ERR(0, 508, __pyx_L1_error);
+  __pyx_t_3 = __Pyx_PyObject_Call(((PyObject *)__pyx_ptype_7cpython_5array_array), __pyx_t_2, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 508, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_v_square_array = ((arrayobject *)__pyx_t_3);
+  __pyx_t_3 = 0;
+
+  /* "tablut.pyx":510
+ *     square_array = array.array('i', squares)
+ * 
+ *     if min(square_array) < 0 or max(square_array) > 80:             # <<<<<<<<<<<<<<
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
+ * 
+ */
+  __pyx_t_3 = __Pyx_PyObject_CallOneArg(__pyx_builtin_min, ((PyObject *)__pyx_v_square_array)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_2 = PyObject_RichCompare(__pyx_t_3, __pyx_int_0, Py_LT); __Pyx_XGOTREF(__pyx_t_2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  if (!__pyx_t_4) {
+  } else {
+    __pyx_t_1 = __pyx_t_4;
+    goto __pyx_L5_bool_binop_done;
+  }
+  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_max, ((PyObject *)__pyx_v_square_array)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = PyObject_RichCompare(__pyx_t_2, __pyx_int_80, Py_GT); __Pyx_XGOTREF(__pyx_t_3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_3); if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(0, 510, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_1 = __pyx_t_4;
+  __pyx_L5_bool_binop_done:;
+  if (unlikely(__pyx_t_1)) {
+
+    /* "tablut.pyx":511
+ * 
+ *     if min(square_array) < 0 or max(square_array) > 80:
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")             # <<<<<<<<<<<<<<
+ * 
+ *     print("****FINDING MAGICS****\n")
+ */
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__18, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 511, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __Pyx_Raise(__pyx_t_3, 0, 0, 0);
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __PYX_ERR(0, 511, __pyx_L1_error)
+
+    /* "tablut.pyx":510
+ *     square_array = array.array('i', squares)
+ * 
+ *     if min(square_array) < 0 or max(square_array) > 80:             # <<<<<<<<<<<<<<
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
+ * 
+ */
+  }
+
+  /* "tablut.pyx":513
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
+ * 
+ *     print("****FINDING MAGICS****\n")             # <<<<<<<<<<<<<<
+ * 
+ *     magics = []
+ */
+  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 513, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+  /* "tablut.pyx":515
+ *     print("****FINDING MAGICS****\n")
+ * 
+ *     magics = []             # <<<<<<<<<<<<<<
+ *     #for i in tqdm(range(len(square_array)), desc="Finding magic numbers", unit="square"):
+ *     for i in range(len(square_array)):
+ */
+  __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 515, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_v_magics = ((PyObject*)__pyx_t_3);
+  __pyx_t_3 = 0;
+
+  /* "tablut.pyx":517
+ *     magics = []
+ *     #for i in tqdm(range(len(square_array)), desc="Finding magic numbers", unit="square"):
+ *     for i in range(len(square_array)):             # <<<<<<<<<<<<<<
+ *         square = square_array[i]
+ *         magic = find_magic(square)
+ */
+  __pyx_t_5 = Py_SIZE(((PyObject *)__pyx_v_square_array)); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 517, __pyx_L1_error)
+  __pyx_t_6 = __pyx_t_5;
+  for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
+    __pyx_v_i = __pyx_t_7;
+
+    /* "tablut.pyx":518
+ *     #for i in tqdm(range(len(square_array)), desc="Finding magic numbers", unit="square"):
+ *     for i in range(len(square_array)):
+ *         square = square_array[i]             # <<<<<<<<<<<<<<
+ *         magic = find_magic(square)
+ *         magics.append(f"0x{magic:016X}")
+ */
+    __pyx_t_3 = __Pyx_GetItemInt(((PyObject *)__pyx_v_square_array), __pyx_v_i, int, 1, __Pyx_PyInt_From_int, 0, 1, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 518, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_8 = __Pyx_PyInt_As_int(__pyx_t_3); if (unlikely((__pyx_t_8 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 518, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __pyx_v_square = __pyx_t_8;
+
+    /* "tablut.pyx":519
+ *     for i in range(len(square_array)):
+ *         square = square_array[i]
+ *         magic = find_magic(square)             # <<<<<<<<<<<<<<
+ *         magics.append(f"0x{magic:016X}")
+ * 
+ */
+    __pyx_t_9 = __pyx_f_6tablut_find_magic(__pyx_v_square); if (unlikely(__pyx_t_9 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 519, __pyx_L1_error)
+    __pyx_v_magic = __pyx_t_9;
+
+    /* "tablut.pyx":520
+ *         square = square_array[i]
+ *         magic = find_magic(square)
+ *         magics.append(f"0x{magic:016X}")             # <<<<<<<<<<<<<<
+ * 
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):
+ */
+    __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_magic); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 520, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_2 = __Pyx_PyObject_Format(__pyx_t_3, __pyx_kp_u_016X); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 520, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __pyx_t_3 = __Pyx_PyUnicode_Concat(__pyx_kp_u_0x_2, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 520, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __pyx_t_10 = __Pyx_PyList_Append(__pyx_v_magics, __pyx_t_3); if (unlikely(__pyx_t_10 == ((int)-1))) __PYX_ERR(0, 520, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  }
+
+  /* "tablut.pyx":522
+ *         magics.append(f"0x{magic:016X}")
+ * 
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):             # <<<<<<<<<<<<<<
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):
+ */
+  __pyx_t_5 = Py_SIZE(((PyObject *)__pyx_v_square_array)); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 522, __pyx_L1_error)
+  __pyx_t_4 = (__pyx_t_5 == 81);
+  if (__pyx_t_4) {
+  } else {
+    __pyx_t_1 = __pyx_t_4;
+    goto __pyx_L10_bool_binop_done;
+  }
+  __pyx_t_3 = PySequence_List(((PyObject *)__pyx_v_square_array)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 522, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_range, __pyx_tuple__17, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 522, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_11 = __Pyx_PySequence_ListKeepNew(__pyx_t_2); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 522, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_11);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_2 = PyObject_RichCompare(__pyx_t_3, __pyx_t_11, Py_EQ); __Pyx_XGOTREF(__pyx_t_2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 522, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(0, 522, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_1 = __pyx_t_4;
+  __pyx_L10_bool_binop_done:;
+  if (__pyx_t_1) {
+
+    /* "tablut.pyx":523
+ * 
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):
+ *         print("cdef uint64_t Magic[81] = {")             # <<<<<<<<<<<<<<
+ *         for i, magic in enumerate(magics):
+ *             if i % 4 == 0 and i != 0:
+ */
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__20, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 523, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+    /* "tablut.pyx":524
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):             # <<<<<<<<<<<<<<
+ *             if i % 4 == 0 and i != 0:
+ *                 print()
+ */
+    __pyx_t_7 = 0;
+    __pyx_t_2 = __pyx_v_magics; __Pyx_INCREF(__pyx_t_2);
+    __pyx_t_5 = 0;
+    for (;;) {
+      {
+        Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_2);
+        #if !CYTHON_ASSUME_SAFE_MACROS
+        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 524, __pyx_L1_error)
+        #endif
+        if (__pyx_t_5 >= __pyx_temp) break;
+      }
+      #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+      __pyx_t_11 = PyList_GET_ITEM(__pyx_t_2, __pyx_t_5); __Pyx_INCREF(__pyx_t_11); __pyx_t_5++; if (unlikely((0 < 0))) __PYX_ERR(0, 524, __pyx_L1_error)
+      #else
+      __pyx_t_11 = __Pyx_PySequence_ITEM(__pyx_t_2, __pyx_t_5); __pyx_t_5++; if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 524, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      #endif
+      __pyx_t_9 = __Pyx_PyInt_As_uint64_t(__pyx_t_11); if (unlikely((__pyx_t_9 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 524, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+      __pyx_v_magic = __pyx_t_9;
+      __pyx_v_i = __pyx_t_7;
+      __pyx_t_7 = (__pyx_t_7 + 1);
+
+      /* "tablut.pyx":525
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):
+ *             if i % 4 == 0 and i != 0:             # <<<<<<<<<<<<<<
+ *                 print()
+ *             print(f"{magic},", end=" ")
+ */
+      __pyx_t_4 = (__Pyx_mod_long(__pyx_v_i, 4) == 0);
+      if (__pyx_t_4) {
+      } else {
+        __pyx_t_1 = __pyx_t_4;
+        goto __pyx_L15_bool_binop_done;
+      }
+      __pyx_t_4 = (__pyx_v_i != 0);
+      __pyx_t_1 = __pyx_t_4;
+      __pyx_L15_bool_binop_done:;
+      if (__pyx_t_1) {
+
+        /* "tablut.pyx":526
+ *         for i, magic in enumerate(magics):
+ *             if i % 4 == 0 and i != 0:
+ *                 print()             # <<<<<<<<<<<<<<
+ *             print(f"{magic},", end=" ")
+ *         print("\n}")
+ */
+        __pyx_t_11 = __Pyx_PyObject_CallNoArg(__pyx_builtin_print); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 526, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_11);
+        __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+
+        /* "tablut.pyx":525
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):
+ *             if i % 4 == 0 and i != 0:             # <<<<<<<<<<<<<<
+ *                 print()
+ *             print(f"{magic},", end=" ")
+ */
+      }
+
+      /* "tablut.pyx":527
+ *             if i % 4 == 0 and i != 0:
+ *                 print()
+ *             print(f"{magic},", end=" ")             # <<<<<<<<<<<<<<
+ *         print("\n}")
+ *     else:
+ */
+      __pyx_t_11 = __Pyx_PyInt_From_uint64_t(__pyx_v_magic); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      __pyx_t_3 = __Pyx_PyObject_FormatSimple(__pyx_t_11, __pyx_empty_unicode); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_3);
+      __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+      __pyx_t_11 = __Pyx_PyUnicode_ConcatInPlace(__pyx_t_3, __pyx_kp_u__21); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+      __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_3);
+      __Pyx_GIVEREF(__pyx_t_11);
+      if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_11)) __PYX_ERR(0, 527, __pyx_L1_error);
+      __pyx_t_11 = 0;
+      __pyx_t_11 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      if (PyDict_SetItem(__pyx_t_11, __pyx_n_s_end, __pyx_kp_u__4) < 0) __PYX_ERR(0, 527, __pyx_L1_error)
+      __pyx_t_12 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_t_3, __pyx_t_11); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 527, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_12);
+      __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+      __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+      __Pyx_DECREF(__pyx_t_12); __pyx_t_12 = 0;
+
+      /* "tablut.pyx":524
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):             # <<<<<<<<<<<<<<
+ *             if i % 4 == 0 and i != 0:
+ *                 print()
+ */
+    }
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+    /* "tablut.pyx":528
+ *                 print()
+ *             print(f"{magic},", end=" ")
+ *         print("\n}")             # <<<<<<<<<<<<<<
+ *     else:
+ *         for i in range(len(square_array)):
+ */
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__23, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 528, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+    /* "tablut.pyx":522
+ *         magics.append(f"0x{magic:016X}")
+ * 
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):             # <<<<<<<<<<<<<<
+ *         print("cdef uint64_t Magic[81] = {")
+ *         for i, magic in enumerate(magics):
+ */
+    goto __pyx_L9;
+  }
+
+  /* "tablut.pyx":530
+ *         print("\n}")
+ *     else:
+ *         for i in range(len(square_array)):             # <<<<<<<<<<<<<<
+ *             print(f"Square {square_array[i]} Magic: {magics[i]}")
+ * 
+ */
+  /*else*/ {
+    __pyx_t_5 = Py_SIZE(((PyObject *)__pyx_v_square_array)); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 530, __pyx_L1_error)
+    __pyx_t_6 = __pyx_t_5;
+    for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
+      __pyx_v_i = __pyx_t_7;
+
+      /* "tablut.pyx":531
+ *     else:
+ *         for i in range(len(square_array)):
+ *             print(f"Square {square_array[i]} Magic: {magics[i]}")             # <<<<<<<<<<<<<<
+ * 
+ *     print("\n****COMPLETE****")
+ */
+      __pyx_t_2 = PyTuple_New(4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_13 = 0;
+      __pyx_t_14 = 127;
+      __Pyx_INCREF(__pyx_kp_u_Square);
+      __pyx_t_13 += 7;
+      __Pyx_GIVEREF(__pyx_kp_u_Square);
+      PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_kp_u_Square);
+      __pyx_t_12 = __Pyx_GetItemInt(((PyObject *)__pyx_v_square_array), __pyx_v_i, int, 1, __Pyx_PyInt_From_int, 0, 1, 1); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_12);
+      __pyx_t_11 = __Pyx_PyObject_FormatSimple(__pyx_t_12, __pyx_empty_unicode); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      __Pyx_DECREF(__pyx_t_12); __pyx_t_12 = 0;
+      __pyx_t_14 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_11) > __pyx_t_14) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_11) : __pyx_t_14;
+      __pyx_t_13 += __Pyx_PyUnicode_GET_LENGTH(__pyx_t_11);
+      __Pyx_GIVEREF(__pyx_t_11);
+      PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_t_11);
+      __pyx_t_11 = 0;
+      __Pyx_INCREF(__pyx_kp_u_Magic);
+      __pyx_t_13 += 8;
+      __Pyx_GIVEREF(__pyx_kp_u_Magic);
+      PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_kp_u_Magic);
+      __pyx_t_11 = __Pyx_GetItemInt_List(__pyx_v_magics, __pyx_v_i, int, 1, __Pyx_PyInt_From_int, 1, 1, 1); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_11);
+      __pyx_t_12 = __Pyx_PyObject_FormatSimple(__pyx_t_11, __pyx_empty_unicode); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_12);
+      __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
+      __pyx_t_14 = (__Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_12) > __pyx_t_14) ? __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_12) : __pyx_t_14;
+      __pyx_t_13 += __Pyx_PyUnicode_GET_LENGTH(__pyx_t_12);
+      __Pyx_GIVEREF(__pyx_t_12);
+      PyTuple_SET_ITEM(__pyx_t_2, 3, __pyx_t_12);
+      __pyx_t_12 = 0;
+      __pyx_t_12 = __Pyx_PyUnicode_Join(__pyx_t_2, 4, __pyx_t_13, __pyx_t_14); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_12);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_12); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 531, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_12); __pyx_t_12 = 0;
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    }
+  }
+  __pyx_L9:;
+
+  /* "tablut.pyx":533
+ *             print(f"Square {square_array[i]} Magic: {magics[i]}")
+ * 
+ *     print("\n****COMPLETE****")             # <<<<<<<<<<<<<<
+ * 
+ * #==============================================================================
+ */
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__24, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 533, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "tablut.pyx":495
+ *         free_blocker_move_tables(&tables)
+ * 
+ * def find_magics(squares=None):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-accessible function to print magic numbers for specified board squares.
+ */
+
+  /* function exit code */
+  __pyx_r = Py_None; __Pyx_INCREF(Py_None);
+  goto __pyx_L0;
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_XDECREF(__pyx_t_11);
+  __Pyx_XDECREF(__pyx_t_12);
+  __Pyx_AddTraceback("tablut.find_magics", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = NULL;
+  __pyx_L0:;
+  __Pyx_XDECREF((PyObject *)__pyx_v_square_array);
+  __Pyx_XDECREF(__pyx_v_magics);
+  __Pyx_XDECREF(__pyx_v_squares);
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "tablut.pyx":539
+ * #==============================================================================
+ * 
+ * def print_blocker_masks():             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-friendly function to print BLOCKER_MASK values
+ */
+
+/* Python wrapper */
+static PyObject *__pyx_pw_6tablut_7print_blocker_masks(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
+PyDoc_STRVAR(__pyx_doc_6tablut_6print_blocker_masks, "\n    Python-friendly function to print BLOCKER_MASK values\n    ");
+static PyMethodDef __pyx_mdef_6tablut_7print_blocker_masks = {"print_blocker_masks", (PyCFunction)__pyx_pw_6tablut_7print_blocker_masks, METH_NOARGS, __pyx_doc_6tablut_6print_blocker_masks};
+static PyObject *__pyx_pw_6tablut_7print_blocker_masks(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("print_blocker_masks (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6tablut_4print_blocker_masks(__pyx_self);
+  __pyx_r = __pyx_pf_6tablut_6print_blocker_masks(__pyx_self);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6tablut_4print_blocker_masks(CYTHON_UNUSED PyObject *__pyx_self) {
+static PyObject *__pyx_pf_6tablut_6print_blocker_masks(CYTHON_UNUSED PyObject *__pyx_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   int __pyx_lineno = 0;
@@ -5232,21 +8794,21 @@ static PyObject *__pyx_pf_6tablut_4print_blocker_masks(CYTHON_UNUSED PyObject *_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("print_blocker_masks", 1);
 
-  /* "tablut.pyx":386
- * 
- * def print_blocker_masks():
+  /* "tablut.pyx":543
+ *     Python-friendly function to print BLOCKER_MASK values
+ *     """
  *     print_masks()             # <<<<<<<<<<<<<<
  * 
  * def print_blocker_bits():
  */
-  __pyx_f_6tablut_print_masks(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 386, __pyx_L1_error)
+  __pyx_f_6tablut_print_masks(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 543, __pyx_L1_error)
 
-  /* "tablut.pyx":385
+  /* "tablut.pyx":539
  * #==============================================================================
  * 
  * def print_blocker_masks():             # <<<<<<<<<<<<<<
- *     print_masks()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_MASK values
  */
 
   /* function exit code */
@@ -5261,31 +8823,32 @@ static PyObject *__pyx_pf_6tablut_4print_blocker_masks(CYTHON_UNUSED PyObject *_
   return __pyx_r;
 }
 
-/* "tablut.pyx":388
+/* "tablut.pyx":545
  *     print_masks()
  * 
  * def print_blocker_bits():             # <<<<<<<<<<<<<<
- *     print_relevant_bits()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_BITS values
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6tablut_7print_blocker_bits(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
-static PyMethodDef __pyx_mdef_6tablut_7print_blocker_bits = {"print_blocker_bits", (PyCFunction)__pyx_pw_6tablut_7print_blocker_bits, METH_NOARGS, 0};
-static PyObject *__pyx_pw_6tablut_7print_blocker_bits(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
+static PyObject *__pyx_pw_6tablut_9print_blocker_bits(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
+PyDoc_STRVAR(__pyx_doc_6tablut_8print_blocker_bits, "\n    Python-friendly function to print BLOCKER_BITS values\n    ");
+static PyMethodDef __pyx_mdef_6tablut_9print_blocker_bits = {"print_blocker_bits", (PyCFunction)__pyx_pw_6tablut_9print_blocker_bits, METH_NOARGS, __pyx_doc_6tablut_8print_blocker_bits};
+static PyObject *__pyx_pw_6tablut_9print_blocker_bits(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("print_blocker_bits (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6tablut_6print_blocker_bits(__pyx_self);
+  __pyx_r = __pyx_pf_6tablut_8print_blocker_bits(__pyx_self);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6tablut_6print_blocker_bits(CYTHON_UNUSED PyObject *__pyx_self) {
+static PyObject *__pyx_pf_6tablut_8print_blocker_bits(CYTHON_UNUSED PyObject *__pyx_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   int __pyx_lineno = 0;
@@ -5293,21 +8856,21 @@ static PyObject *__pyx_pf_6tablut_6print_blocker_bits(CYTHON_UNUSED PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("print_blocker_bits", 1);
 
-  /* "tablut.pyx":389
- * 
- * def print_blocker_bits():
+  /* "tablut.pyx":549
+ *     Python-friendly function to print BLOCKER_BITS values
+ *     """
  *     print_relevant_bits()             # <<<<<<<<<<<<<<
  * 
  * def test():
  */
-  __pyx_f_6tablut_print_relevant_bits(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 389, __pyx_L1_error)
+  __pyx_f_6tablut_print_relevant_bits(); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 549, __pyx_L1_error)
 
-  /* "tablut.pyx":388
+  /* "tablut.pyx":545
  *     print_masks()
  * 
  * def print_blocker_bits():             # <<<<<<<<<<<<<<
- *     print_relevant_bits()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_BITS values
  */
 
   /* function exit code */
@@ -5322,7 +8885,7 @@ static PyObject *__pyx_pf_6tablut_6print_blocker_bits(CYTHON_UNUSED PyObject *__
   return __pyx_r;
 }
 
-/* "tablut.pyx":391
+/* "tablut.pyx":551
  *     print_relevant_bits()
  * 
  * def test():             # <<<<<<<<<<<<<<
@@ -5331,22 +8894,22 @@ static PyObject *__pyx_pf_6tablut_6print_blocker_bits(CYTHON_UNUSED PyObject *__
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6tablut_9test(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
-static PyMethodDef __pyx_mdef_6tablut_9test = {"test", (PyCFunction)__pyx_pw_6tablut_9test, METH_NOARGS, 0};
-static PyObject *__pyx_pw_6tablut_9test(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
+static PyObject *__pyx_pw_6tablut_11test(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused); /*proto*/
+static PyMethodDef __pyx_mdef_6tablut_11test = {"test", (PyCFunction)__pyx_pw_6tablut_11test, METH_NOARGS, 0};
+static PyObject *__pyx_pw_6tablut_11test(PyObject *__pyx_self, CYTHON_UNUSED PyObject *unused) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("test (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6tablut_8test(__pyx_self);
+  __pyx_r = __pyx_pf_6tablut_10test(__pyx_self);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self) {
+static PyObject *__pyx_pf_6tablut_10test(CYTHON_UNUSED PyObject *__pyx_self) {
   uint64_t __pyx_v_r;
   struct __pyx_t_6tablut_Bitboard __pyx_v_board;
   PyObject *__pyx_r = NULL;
@@ -5363,17 +8926,17 @@ static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("test", 1);
 
-  /* "tablut.pyx":392
+  /* "tablut.pyx":552
  * 
  * def test():
  *     cdef uint64_t r = random_u64()             # <<<<<<<<<<<<<<
  *     cdef Bitboard board = Bitboard(r, 0)
  *     print(r)
  */
-  __pyx_t_1 = __pyx_f_6tablut_random_u64(); if (unlikely(__pyx_t_1 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 392, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6tablut_random_u64(); if (unlikely(__pyx_t_1 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 552, __pyx_L1_error)
   __pyx_v_r = __pyx_t_1;
 
-  /* "tablut.pyx":393
+  /* "tablut.pyx":553
  * def test():
  *     cdef uint64_t r = random_u64()
  *     cdef Bitboard board = Bitboard(r, 0)             # <<<<<<<<<<<<<<
@@ -5384,30 +8947,30 @@ static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self) {
   __pyx_t_2.high = 0;
   __pyx_v_board = __pyx_t_2;
 
-  /* "tablut.pyx":394
+  /* "tablut.pyx":554
  *     cdef uint64_t r = random_u64()
  *     cdef Bitboard board = Bitboard(r, 0)
  *     print(r)             # <<<<<<<<<<<<<<
  *     print_board(board)
  * #---------------------------------------------
  */
-  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_r); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 394, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_uint64_t(__pyx_v_r); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 554, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 394, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 554, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "tablut.pyx":395
+  /* "tablut.pyx":555
  *     cdef Bitboard board = Bitboard(r, 0)
  *     print(r)
  *     print_board(board)             # <<<<<<<<<<<<<<
  * #---------------------------------------------
  * 
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_print_board); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 395, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_print_board); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 555, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_5 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_board); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 395, __pyx_L1_error)
+  __pyx_t_5 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_board); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 555, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __pyx_t_6 = NULL;
   __pyx_t_7 = 0;
@@ -5428,13 +8991,13 @@ static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self) {
     __pyx_t_4 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_7, 1+__pyx_t_7);
     __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 395, __pyx_L1_error)
+    if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 555, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "tablut.pyx":391
+  /* "tablut.pyx":551
  *     print_relevant_bits()
  * 
  * def test():             # <<<<<<<<<<<<<<
@@ -5458,418 +9021,25 @@ static PyObject *__pyx_pf_6tablut_8test(CYTHON_UNUSED PyObject *__pyx_self) {
   return __pyx_r;
 }
 
-/* "tablut.pyx":403
- *     size_t size
+/* "tablut.pyx":558
+ * #---------------------------------------------
  * 
- * cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):             # <<<<<<<<<<<<<<
- *     cdef Bitboard next
- *     cdef uint64_t carry
- */
-
-static struct __pyx_t_6tablut_Bitboard __pyx_f_6tablut_carry_rippler_next(struct __pyx_t_6tablut_Bitboard __pyx_v_subset, struct __pyx_t_6tablut_Bitboard __pyx_v_mask) {
-  struct __pyx_t_6tablut_Bitboard __pyx_v_next;
-  uint64_t __pyx_v_carry;
-  struct __pyx_t_6tablut_Bitboard __pyx_r;
-
-  /* "tablut.pyx":407
- *     cdef uint64_t carry
- * 
- *     next.low = (subset.low - mask.low) & mask.low             # <<<<<<<<<<<<<<
- *     carry = (subset.low - mask.low) > subset.low
- *     next.high = ((subset.high - carry) - mask.high) & mask.high
- */
-  __pyx_v_next.low = ((__pyx_v_subset.low - __pyx_v_mask.low) & __pyx_v_mask.low);
-
-  /* "tablut.pyx":408
- * 
- *     next.low = (subset.low - mask.low) & mask.low
- *     carry = (subset.low - mask.low) > subset.low             # <<<<<<<<<<<<<<
- *     next.high = ((subset.high - carry) - mask.high) & mask.high
- * 
- */
-  __pyx_v_carry = ((__pyx_v_subset.low - __pyx_v_mask.low) > __pyx_v_subset.low);
-
-  /* "tablut.pyx":409
- *     next.low = (subset.low - mask.low) & mask.low
- *     carry = (subset.low - mask.low) > subset.low
- *     next.high = ((subset.high - carry) - mask.high) & mask.high             # <<<<<<<<<<<<<<
- * 
- *     return next
- */
-  __pyx_v_next.high = (((__pyx_v_subset.high - __pyx_v_carry) - __pyx_v_mask.high) & __pyx_v_mask.high);
-
-  /* "tablut.pyx":411
- *     next.high = ((subset.high - carry) - mask.high) & mask.high
- * 
- *     return next             # <<<<<<<<<<<<<<
- * 
- * cdef BlockerMoveTables build_blocker_move_tables(int square):
- */
-  __pyx_r = __pyx_v_next;
-  goto __pyx_L0;
-
-  /* "tablut.pyx":403
- *     size_t size
- * 
- * cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):             # <<<<<<<<<<<<<<
- *     cdef Bitboard next
- *     cdef uint64_t carry
- */
-
-  /* function exit code */
-  __pyx_L0:;
-  return __pyx_r;
-}
-
-/* "tablut.pyx":413
- *     return next
- * 
- * cdef BlockerMoveTables build_blocker_move_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef BlockerMoveTables tables
- *     cdef Bitboard mask = get_blocker_mask(square)
- */
-
-static struct __pyx_t_6tablut_BlockerMoveTables __pyx_f_6tablut_build_blocker_move_tables(int __pyx_v_square) {
-  struct __pyx_t_6tablut_BlockerMoveTables __pyx_v_tables;
-  struct __pyx_t_6tablut_Bitboard __pyx_v_mask;
-  struct __pyx_t_6tablut_Bitboard __pyx_v_subset;
-  int __pyx_v_index;
-  struct __pyx_t_6tablut_BlockerMoveTables __pyx_r;
-  __Pyx_RefNannyDeclarations
-  struct __pyx_t_6tablut_Bitboard __pyx_t_1;
-  PyObject *__pyx_t_2 = NULL;
-  PyObject *__pyx_t_3 = NULL;
-  uint64_t __pyx_t_4;
-  int __pyx_t_5;
-  int __pyx_t_6;
-  int __pyx_lineno = 0;
-  const char *__pyx_filename = NULL;
-  int __pyx_clineno = 0;
-  __Pyx_RefNannySetupContext("build_blocker_move_tables", 1);
-
-  /* "tablut.pyx":415
- * cdef BlockerMoveTables build_blocker_move_tables(int square):
- *     cdef BlockerMoveTables tables
- *     cdef Bitboard mask = get_blocker_mask(square)             # <<<<<<<<<<<<<<
- *     cdef Bitboard subset = Bitboard(0, 0)
- *     cdef int index = 0
- */
-  __pyx_t_1 = __pyx_f_6tablut_get_blocker_mask(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 415, __pyx_L1_error)
-  __pyx_v_mask = __pyx_t_1;
-
-  /* "tablut.pyx":416
- *     cdef BlockerMoveTables tables
- *     cdef Bitboard mask = get_blocker_mask(square)
- *     cdef Bitboard subset = Bitboard(0, 0)             # <<<<<<<<<<<<<<
- *     cdef int index = 0
- * 
- */
-  __pyx_t_1.low = 0;
-  __pyx_t_1.high = 0;
-  __pyx_v_subset = __pyx_t_1;
-
-  /* "tablut.pyx":417
- *     cdef Bitboard mask = get_blocker_mask(square)
- *     cdef Bitboard subset = Bitboard(0, 0)
- *     cdef int index = 0             # <<<<<<<<<<<<<<
- * 
- *     tables.size = 1 << BLOCKER_BITS[square]
- */
-  __pyx_v_index = 0;
-
-  /* "tablut.pyx":419
- *     cdef int index = 0
- * 
- *     tables.size = 1 << BLOCKER_BITS[square]             # <<<<<<<<<<<<<<
- *     print(BLOCKER_BITS[square])
- *     print(tables.size)
- */
-  __pyx_v_tables.size = (1 << (__pyx_v_6tablut_BLOCKER_BITS[__pyx_v_square]));
-
-  /* "tablut.pyx":420
- * 
- *     tables.size = 1 << BLOCKER_BITS[square]
- *     print(BLOCKER_BITS[square])             # <<<<<<<<<<<<<<
- *     print(tables.size)
- *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
- */
-  __pyx_t_2 = __Pyx_PyInt_From_int((__pyx_v_6tablut_BLOCKER_BITS[__pyx_v_square])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 420, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_3 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 420, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":421
- *     tables.size = 1 << BLOCKER_BITS[square]
- *     print(BLOCKER_BITS[square])
- *     print(tables.size)             # <<<<<<<<<<<<<<
- *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
- *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
- */
-  __pyx_t_3 = __Pyx_PyInt_FromSize_t(__pyx_v_tables.size); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 421, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_print, __pyx_t_3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 421, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-
-  /* "tablut.pyx":422
- *     print(BLOCKER_BITS[square])
- *     print(tables.size)
- *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))             # <<<<<<<<<<<<<<
- *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
- * 
- */
-  __pyx_v_tables.blockers = ((uint64_t *)malloc((__pyx_v_tables.size * (sizeof(uint64_t)))));
-
-  /* "tablut.pyx":423
- *     print(tables.size)
- *     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
- *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))             # <<<<<<<<<<<<<<
- * 
- *     while True:
- */
-  __pyx_v_tables.moves = ((struct __pyx_t_6tablut_Bitboard *)malloc((__pyx_v_tables.size * (sizeof(struct __pyx_t_6tablut_Bitboard)))));
-
-  /* "tablut.pyx":425
- *     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
- * 
- *     while True:             # <<<<<<<<<<<<<<
- *         tables.blockers[index] = merge(subset)
- *         tables.moves[index] = find_moves_otf(subset, square)
- */
-  while (1) {
-
-    /* "tablut.pyx":426
- * 
- *     while True:
- *         tables.blockers[index] = merge(subset)             # <<<<<<<<<<<<<<
- *         tables.moves[index] = find_moves_otf(subset, square)
- *         index += 1
- */
-    __pyx_t_4 = __pyx_f_6tablut_merge(__pyx_v_subset); if (unlikely(__pyx_t_4 == ((uint64_t)-1) && PyErr_Occurred())) __PYX_ERR(0, 426, __pyx_L1_error)
-    (__pyx_v_tables.blockers[__pyx_v_index]) = __pyx_t_4;
-
-    /* "tablut.pyx":427
- *     while True:
- *         tables.blockers[index] = merge(subset)
- *         tables.moves[index] = find_moves_otf(subset, square)             # <<<<<<<<<<<<<<
- *         index += 1
- *         subset = carry_rippler_next(subset, mask)
- */
-    __pyx_t_1 = __pyx_f_6tablut_find_moves_otf(__pyx_v_subset, __pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 427, __pyx_L1_error)
-    (__pyx_v_tables.moves[__pyx_v_index]) = __pyx_t_1;
-
-    /* "tablut.pyx":428
- *         tables.blockers[index] = merge(subset)
- *         tables.moves[index] = find_moves_otf(subset, square)
- *         index += 1             # <<<<<<<<<<<<<<
- *         subset = carry_rippler_next(subset, mask)
- *         if subset.low == 0 and subset.high == 0:
- */
-    __pyx_v_index = (__pyx_v_index + 1);
-
-    /* "tablut.pyx":429
- *         tables.moves[index] = find_moves_otf(subset, square)
- *         index += 1
- *         subset = carry_rippler_next(subset, mask)             # <<<<<<<<<<<<<<
- *         if subset.low == 0 and subset.high == 0:
- *             break
- */
-    __pyx_t_1 = __pyx_f_6tablut_carry_rippler_next(__pyx_v_subset, __pyx_v_mask); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 429, __pyx_L1_error)
-    __pyx_v_subset = __pyx_t_1;
-
-    /* "tablut.pyx":430
- *         index += 1
- *         subset = carry_rippler_next(subset, mask)
- *         if subset.low == 0 and subset.high == 0:             # <<<<<<<<<<<<<<
- *             break
- * 
- */
-    __pyx_t_6 = (__pyx_v_subset.low == 0);
-    if (__pyx_t_6) {
-    } else {
-      __pyx_t_5 = __pyx_t_6;
-      goto __pyx_L6_bool_binop_done;
-    }
-    __pyx_t_6 = (__pyx_v_subset.high == 0);
-    __pyx_t_5 = __pyx_t_6;
-    __pyx_L6_bool_binop_done:;
-    if (__pyx_t_5) {
-
-      /* "tablut.pyx":431
- *         subset = carry_rippler_next(subset, mask)
- *         if subset.low == 0 and subset.high == 0:
- *             break             # <<<<<<<<<<<<<<
- * 
- *     return tables
- */
-      goto __pyx_L4_break;
-
-      /* "tablut.pyx":430
- *         index += 1
- *         subset = carry_rippler_next(subset, mask)
- *         if subset.low == 0 and subset.high == 0:             # <<<<<<<<<<<<<<
- *             break
- * 
- */
-    }
-  }
-  __pyx_L4_break:;
-
-  /* "tablut.pyx":433
- *             break
- * 
- *     return tables             # <<<<<<<<<<<<<<
- * 
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):
- */
-  __pyx_r = __pyx_v_tables;
-  goto __pyx_L0;
-
-  /* "tablut.pyx":413
- *     return next
- * 
- * cdef BlockerMoveTables build_blocker_move_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef BlockerMoveTables tables
- *     cdef Bitboard mask = get_blocker_mask(square)
- */
-
-  /* function exit code */
-  __pyx_L1_error:;
-  __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("tablut.build_blocker_move_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
-  __Pyx_pretend_to_initialize(&__pyx_r);
-  __pyx_L0:;
-  __Pyx_RefNannyFinishContext();
-  return __pyx_r;
-}
-
-/* "tablut.pyx":435
- *     return tables
- * 
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):             # <<<<<<<<<<<<<<
- *     if tables.blockers != NULL:
- *         free(tables.blockers)
- */
-
-static void __pyx_f_6tablut_free_blocker_move_tables(struct __pyx_t_6tablut_BlockerMoveTables *__pyx_v_tables) {
-  int __pyx_t_1;
-
-  /* "tablut.pyx":436
- * 
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):
- *     if tables.blockers != NULL:             # <<<<<<<<<<<<<<
- *         free(tables.blockers)
- *         tables.blockers = NULL
- */
-  __pyx_t_1 = (__pyx_v_tables->blockers != NULL);
-  if (__pyx_t_1) {
-
-    /* "tablut.pyx":437
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):
- *     if tables.blockers != NULL:
- *         free(tables.blockers)             # <<<<<<<<<<<<<<
- *         tables.blockers = NULL
- *     if tables.moves != NULL:
- */
-    free(__pyx_v_tables->blockers);
-
-    /* "tablut.pyx":438
- *     if tables.blockers != NULL:
- *         free(tables.blockers)
- *         tables.blockers = NULL             # <<<<<<<<<<<<<<
- *     if tables.moves != NULL:
- *         free(tables.moves)
- */
-    __pyx_v_tables->blockers = NULL;
-
-    /* "tablut.pyx":436
- * 
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):
- *     if tables.blockers != NULL:             # <<<<<<<<<<<<<<
- *         free(tables.blockers)
- *         tables.blockers = NULL
- */
-  }
-
-  /* "tablut.pyx":439
- *         free(tables.blockers)
- *         tables.blockers = NULL
- *     if tables.moves != NULL:             # <<<<<<<<<<<<<<
- *         free(tables.moves)
- *         tables.moves = NULL
- */
-  __pyx_t_1 = (__pyx_v_tables->moves != NULL);
-  if (__pyx_t_1) {
-
-    /* "tablut.pyx":440
- *         tables.blockers = NULL
- *     if tables.moves != NULL:
- *         free(tables.moves)             # <<<<<<<<<<<<<<
- *         tables.moves = NULL
- *     tables.size = 0
- */
-    free(__pyx_v_tables->moves);
-
-    /* "tablut.pyx":441
- *     if tables.moves != NULL:
- *         free(tables.moves)
- *         tables.moves = NULL             # <<<<<<<<<<<<<<
- *     tables.size = 0
- * 
- */
-    __pyx_v_tables->moves = NULL;
-
-    /* "tablut.pyx":439
- *         free(tables.blockers)
- *         tables.blockers = NULL
- *     if tables.moves != NULL:             # <<<<<<<<<<<<<<
- *         free(tables.moves)
- *         tables.moves = NULL
- */
-  }
-
-  /* "tablut.pyx":442
- *         free(tables.moves)
- *         tables.moves = NULL
- *     tables.size = 0             # <<<<<<<<<<<<<<
- * 
- * def build_tables(int square):
- */
-  __pyx_v_tables->size = 0;
-
-  /* "tablut.pyx":435
- *     return tables
- * 
- * cdef void free_blocker_move_tables(BlockerMoveTables* tables):             # <<<<<<<<<<<<<<
- *     if tables.blockers != NULL:
- *         free(tables.blockers)
- */
-
-  /* function exit code */
-}
-
-/* "tablut.pyx":444
- *     tables.size = 0
- * 
- * def build_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard tmp = Bitboard(0,0)
- *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ * def py_build_bm_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6tablut_11build_tables(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_6tablut_13py_build_bm_tables(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6tablut_11build_tables = {"build_tables", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6tablut_11build_tables, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6tablut_11build_tables(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_6tablut_12py_build_bm_tables, "\n    Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.\n    ");
+static PyMethodDef __pyx_mdef_6tablut_13py_build_bm_tables = {"py_build_bm_tables", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6tablut_13py_build_bm_tables, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6tablut_12py_build_bm_tables};
+static PyObject *__pyx_pw_6tablut_13py_build_bm_tables(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -5887,7 +9057,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   int __pyx_clineno = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
-  __Pyx_RefNannySetupContext("build_tables (wrapper)", 0);
+  __Pyx_RefNannySetupContext("py_build_bm_tables (wrapper)", 0);
   #if !CYTHON_METH_FASTCALL
   #if CYTHON_ASSUME_SAFE_MACROS
   __pyx_nargs = PyTuple_GET_SIZE(__pyx_args);
@@ -5913,23 +9083,23 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 444, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 558, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "build_tables") < 0)) __PYX_ERR(0, 444, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "py_build_bm_tables") < 0)) __PYX_ERR(0, 558, __pyx_L3_error)
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_Arg_FASTCALL(__pyx_args, 0);
     }
-    __pyx_v_square = __Pyx_PyInt_As_int(values[0]); if (unlikely((__pyx_v_square == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 444, __pyx_L3_error)
+    __pyx_v_square = __Pyx_PyInt_As_int(values[0]); if (unlikely((__pyx_v_square == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 558, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("build_tables", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 444, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("py_build_bm_tables", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 558, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -5939,11 +9109,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("tablut.build_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("tablut.py_build_bm_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6tablut_10build_tables(__pyx_self, __pyx_v_square);
+  __pyx_r = __pyx_pf_6tablut_12py_build_bm_tables(__pyx_self, __pyx_v_square);
 
   /* function exit code */
   {
@@ -5956,8 +9126,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6tablut_10build_tables(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_square) {
-  struct __pyx_t_6tablut_Bitboard __pyx_v_tmp;
+static PyObject *__pyx_pf_6tablut_12py_build_bm_tables(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_square) {
+  CYTHON_UNUSED struct __pyx_t_6tablut_Bitboard __pyx_v_tmp;
   struct __pyx_t_6tablut_BlockerMoveTables __pyx_v_tables;
   PyObject *__pyx_v_blockers = NULL;
   PyObject *__pyx_v_moves = NULL;
@@ -5972,17 +9142,14 @@ static PyObject *__pyx_pf_6tablut_10build_tables(CYTHON_UNUSED PyObject *__pyx_s
   size_t __pyx_t_5;
   size_t __pyx_t_6;
   PyObject *__pyx_t_7 = NULL;
-  PyObject *__pyx_t_8 = NULL;
-  PyObject *__pyx_t_9 = NULL;
-  unsigned int __pyx_t_10;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
-  __Pyx_RefNannySetupContext("build_tables", 1);
+  __Pyx_RefNannySetupContext("py_build_bm_tables", 1);
 
-  /* "tablut.pyx":445
- * 
- * def build_tables(int square):
+  /* "tablut.pyx":562
+ *     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
+ *     """
  *     cdef Bitboard tmp = Bitboard(0,0)             # <<<<<<<<<<<<<<
  *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
  *     blockers = [tables.blockers[i] for i in range(tables.size)]
@@ -5991,471 +9158,102 @@ static PyObject *__pyx_pf_6tablut_10build_tables(CYTHON_UNUSED PyObject *__pyx_s
   __pyx_t_1.high = 0;
   __pyx_v_tmp = __pyx_t_1;
 
-  /* "tablut.pyx":446
- * def build_tables(int square):
+  /* "tablut.pyx":563
+ *     """
  *     cdef Bitboard tmp = Bitboard(0,0)
  *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)             # <<<<<<<<<<<<<<
  *     blockers = [tables.blockers[i] for i in range(tables.size)]
  *     moves = [tables.moves[i] for i in range(tables.size)]
  */
-  __pyx_t_2 = __pyx_f_6tablut_build_blocker_move_tables(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 446, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6tablut_build_blocker_move_tables(__pyx_v_square); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 563, __pyx_L1_error)
   __pyx_v_tables = __pyx_t_2;
 
-  /* "tablut.pyx":447
+  /* "tablut.pyx":564
  *     cdef Bitboard tmp = Bitboard(0,0)
  *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
  *     blockers = [tables.blockers[i] for i in range(tables.size)]             # <<<<<<<<<<<<<<
  *     moves = [tables.moves[i] for i in range(tables.size)]
- * 
+ *     free_blocker_move_tables(&tables)
  */
   { /* enter inner scope */
-    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 447, __pyx_L1_error)
+    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 564, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_t_4 = __pyx_v_tables.size;
     __pyx_t_5 = __pyx_t_4;
     for (__pyx_t_6 = 0; __pyx_t_6 < __pyx_t_5; __pyx_t_6+=1) {
       __pyx_7genexpr__pyx_v_i = __pyx_t_6;
-      __pyx_t_7 = __Pyx_PyInt_From_uint64_t((__pyx_v_tables.blockers[__pyx_7genexpr__pyx_v_i])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 447, __pyx_L1_error)
+      __pyx_t_7 = __Pyx_PyInt_From_uint64_t((__pyx_v_tables.blockers[__pyx_7genexpr__pyx_v_i])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 564, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_7);
-      if (unlikely(__Pyx_ListComp_Append(__pyx_t_3, (PyObject*)__pyx_t_7))) __PYX_ERR(0, 447, __pyx_L1_error)
+      if (unlikely(__Pyx_ListComp_Append(__pyx_t_3, (PyObject*)__pyx_t_7))) __PYX_ERR(0, 564, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     }
   } /* exit inner scope */
   __pyx_v_blockers = ((PyObject*)__pyx_t_3);
   __pyx_t_3 = 0;
 
-  /* "tablut.pyx":448
+  /* "tablut.pyx":565
  *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
  *     blockers = [tables.blockers[i] for i in range(tables.size)]
  *     moves = [tables.moves[i] for i in range(tables.size)]             # <<<<<<<<<<<<<<
+ *     free_blocker_move_tables(&tables)
  * 
- *     # Print some sample data
  */
   { /* enter inner scope */
-    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 448, __pyx_L1_error)
+    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 565, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_t_4 = __pyx_v_tables.size;
     __pyx_t_5 = __pyx_t_4;
     for (__pyx_t_6 = 0; __pyx_t_6 < __pyx_t_5; __pyx_t_6+=1) {
       __pyx_8genexpr1__pyx_v_i = __pyx_t_6;
-      __pyx_t_7 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[__pyx_8genexpr1__pyx_v_i])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 448, __pyx_L1_error)
+      __pyx_t_7 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[__pyx_8genexpr1__pyx_v_i])); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 565, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_7);
-      if (unlikely(__Pyx_ListComp_Append(__pyx_t_3, (PyObject*)__pyx_t_7))) __PYX_ERR(0, 448, __pyx_L1_error)
+      if (unlikely(__Pyx_ListComp_Append(__pyx_t_3, (PyObject*)__pyx_t_7))) __PYX_ERR(0, 565, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     }
   } /* exit inner scope */
   __pyx_v_moves = ((PyObject*)__pyx_t_3);
   __pyx_t_3 = 0;
 
-  /* "tablut.pyx":451
- * 
- *     # Print some sample data
- *     tmp.low = tables.blockers[0]             # <<<<<<<<<<<<<<
- *     print_board(tmp)
- *     print_board(tables.moves[0])
- */
-  __pyx_v_tmp.low = (__pyx_v_tables.blockers[0]);
-
-  /* "tablut.pyx":452
- *     # Print some sample data
- *     tmp.low = tables.blockers[0]
- *     print_board(tmp)             # <<<<<<<<<<<<<<
- *     print_board(tables.moves[0])
- *     print('----------------------------------')
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 452, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_tmp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 452, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 452, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":453
- *     tmp.low = tables.blockers[0]
- *     print_board(tmp)
- *     print_board(tables.moves[0])             # <<<<<<<<<<<<<<
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[10]
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 453, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[0])); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 453, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 453, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":454
- *     print_board(tmp)
- *     print_board(tables.moves[0])
- *     print('----------------------------------')             # <<<<<<<<<<<<<<
- *     tmp.low = tables.blockers[10]
- *     print_board(tmp)
- */
-  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 454, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":455
- *     print_board(tables.moves[0])
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[10]             # <<<<<<<<<<<<<<
- *     print_board(tmp)
- *     print_board(tables.moves[10])
- */
-  __pyx_v_tmp.low = (__pyx_v_tables.blockers[10]);
-
-  /* "tablut.pyx":456
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[10]
- *     print_board(tmp)             # <<<<<<<<<<<<<<
- *     print_board(tables.moves[10])
- *     print('----------------------------------')
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 456, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_tmp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 456, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 456, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":457
- *     tmp.low = tables.blockers[10]
- *     print_board(tmp)
- *     print_board(tables.moves[10])             # <<<<<<<<<<<<<<
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[1000]
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 457, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[10])); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 457, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 457, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":458
- *     print_board(tmp)
- *     print_board(tables.moves[10])
- *     print('----------------------------------')             # <<<<<<<<<<<<<<
- *     tmp.low = tables.blockers[1000]
- *     print_board(tmp)
- */
-  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 458, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":459
- *     print_board(tables.moves[10])
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[1000]             # <<<<<<<<<<<<<<
- *     print_board(tmp)
- *     print_board(tables.moves[1000])
- */
-  __pyx_v_tmp.low = (__pyx_v_tables.blockers[0x3E8]);
-
-  /* "tablut.pyx":460
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[1000]
- *     print_board(tmp)             # <<<<<<<<<<<<<<
- *     print_board(tables.moves[1000])
- *     print('----------------------------------')
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 460, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_tmp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 460, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 460, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":461
- *     tmp.low = tables.blockers[1000]
- *     print_board(tmp)
- *     print_board(tables.moves[1000])             # <<<<<<<<<<<<<<
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 461, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[0x3E8])); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 461, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 461, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":462
- *     print_board(tmp)
- *     print_board(tables.moves[1000])
- *     print('----------------------------------')             # <<<<<<<<<<<<<<
- *     tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1
- *     print_board(tmp)
- */
-  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 462, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":463
- *     print_board(tables.moves[1000])
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1             # <<<<<<<<<<<<<<
- *     print_board(tmp)
- *     print_board(tables.moves[tables.size - 511])
- */
-  __pyx_v_tmp.low = (__pyx_v_tables.blockers[(__pyx_v_tables.size - 0x1FF)]);
-
-  /* "tablut.pyx":464
- *     print('----------------------------------')
- *     tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1
- *     print_board(tmp)             # <<<<<<<<<<<<<<
- *     print_board(tables.moves[tables.size - 511])
- *     print('----------------------------------')
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 464, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(__pyx_v_tmp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 464, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 464, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":465
- *     tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1
- *     print_board(tmp)
- *     print_board(tables.moves[tables.size - 511])             # <<<<<<<<<<<<<<
- *     print('----------------------------------')
- * 
- */
-  __Pyx_GetModuleGlobalName(__pyx_t_7, __pyx_n_s_print_board); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 465, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_8 = __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard((__pyx_v_tables.moves[(__pyx_v_tables.size - 0x1FF)])); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 465, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = NULL;
-  __pyx_t_10 = 0;
-  #if CYTHON_UNPACK_METHODS
-  if (unlikely(PyMethod_Check(__pyx_t_7))) {
-    __pyx_t_9 = PyMethod_GET_SELF(__pyx_t_7);
-    if (likely(__pyx_t_9)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
-      __Pyx_INCREF(__pyx_t_9);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_7, function);
-      __pyx_t_10 = 1;
-    }
-  }
-  #endif
-  {
-    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_8};
-    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_10, 1+__pyx_t_10);
-    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 465, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":466
- *     print_board(tmp)
- *     print_board(tables.moves[tables.size - 511])
- *     print('----------------------------------')             # <<<<<<<<<<<<<<
- * 
- *     free_blocker_move_tables(&tables)
- */
-  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_print, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 466, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-
-  /* "tablut.pyx":468
- *     print('----------------------------------')
- * 
+  /* "tablut.pyx":566
+ *     blockers = [tables.blockers[i] for i in range(tables.size)]
+ *     moves = [tables.moves[i] for i in range(tables.size)]
  *     free_blocker_move_tables(&tables)             # <<<<<<<<<<<<<<
+ * 
  *     return blockers, moves
  */
-  __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 468, __pyx_L1_error)
+  __pyx_f_6tablut_free_blocker_move_tables((&__pyx_v_tables)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 566, __pyx_L1_error)
 
-  /* "tablut.pyx":469
- * 
+  /* "tablut.pyx":568
  *     free_blocker_move_tables(&tables)
+ * 
  *     return blockers, moves             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 469, __pyx_L1_error)
+  __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 568, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_INCREF(__pyx_v_blockers);
   __Pyx_GIVEREF(__pyx_v_blockers);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_v_blockers)) __PYX_ERR(0, 469, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_v_blockers)) __PYX_ERR(0, 568, __pyx_L1_error);
   __Pyx_INCREF(__pyx_v_moves);
   __Pyx_GIVEREF(__pyx_v_moves);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_v_moves)) __PYX_ERR(0, 469, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_v_moves)) __PYX_ERR(0, 568, __pyx_L1_error);
   __pyx_r = __pyx_t_3;
   __pyx_t_3 = 0;
   goto __pyx_L0;
 
-  /* "tablut.pyx":444
- *     tables.size = 0
+  /* "tablut.pyx":558
+ * #---------------------------------------------
  * 
- * def build_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard tmp = Bitboard(0,0)
- *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ * def py_build_bm_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
  */
 
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_XDECREF(__pyx_t_8);
-  __Pyx_XDECREF(__pyx_t_9);
-  __Pyx_AddTraceback("tablut.build_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("tablut.py_build_bm_tables", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_blockers);
@@ -6483,40 +9281,69 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
   __Pyx_StringTabEntry __pyx_string_tab[] = {
     {&__pyx_kp_u_016X, __pyx_k_016X, sizeof(__pyx_k_016X), 0, 1, 0, 0},
     {&__pyx_kp_u_0x, __pyx_k_0x, sizeof(__pyx_k_0x), 0, 1, 0, 0},
+    {&__pyx_kp_u_0x_2, __pyx_k_0x_2, sizeof(__pyx_k_0x_2), 0, 1, 0, 0},
     {&__pyx_kp_u_1, __pyx_k_1, sizeof(__pyx_k_1), 0, 1, 0, 0},
+    {&__pyx_kp_u_Best_Magic_passed_first, __pyx_k_Best_Magic_passed_first, sizeof(__pyx_k_Best_Magic_passed_first), 0, 1, 0, 0},
     {&__pyx_kp_u_Bit_index_must_be_between_0_and, __pyx_k_Bit_index_must_be_between_0_and, sizeof(__pyx_k_Bit_index_must_be_between_0_and), 0, 1, 0, 0},
     {&__pyx_kp_u_Bitboard, __pyx_k_Bitboard, sizeof(__pyx_k_Bitboard), 0, 1, 0, 0},
     {&__pyx_kp_u_Bitboard_hex_0x, __pyx_k_Bitboard_hex_0x, sizeof(__pyx_k_Bitboard_hex_0x), 0, 1, 0, 0},
     {&__pyx_kp_u_Bitboard_low_0x, __pyx_k_Bitboard_low_0x, sizeof(__pyx_k_Bitboard_low_0x), 0, 1, 0, 0},
+    {&__pyx_kp_u_COMPLETE, __pyx_k_COMPLETE, sizeof(__pyx_k_COMPLETE), 0, 1, 0, 0},
+    {&__pyx_kp_u_FINDING_MAGICS, __pyx_k_FINDING_MAGICS, sizeof(__pyx_k_FINDING_MAGICS), 0, 1, 0, 0},
+    {&__pyx_kp_u_Failed_to_allocate_memory_for_bl, __pyx_k_Failed_to_allocate_memory_for_bl, sizeof(__pyx_k_Failed_to_allocate_memory_for_bl), 0, 1, 0, 0},
+    {&__pyx_kp_u_Failed_to_allocate_memory_for_us, __pyx_k_Failed_to_allocate_memory_for_us, sizeof(__pyx_k_Failed_to_allocate_memory_for_us), 0, 1, 0, 0},
+    {&__pyx_kp_u_Failed_to_find_Magic_for_square, __pyx_k_Failed_to_find_Magic_for_square, sizeof(__pyx_k_Failed_to_find_Magic_for_square), 0, 1, 0, 0},
+    {&__pyx_kp_u_Invalid_square_s_Must_be_0_squar, __pyx_k_Invalid_square_s_Must_be_0_squar, sizeof(__pyx_k_Invalid_square_s_Must_be_0_squar), 0, 1, 0, 0},
     {&__pyx_n_s_KeyError, __pyx_k_KeyError, sizeof(__pyx_k_KeyError), 0, 0, 1, 1},
+    {&__pyx_n_s_List, __pyx_k_List, sizeof(__pyx_k_List), 0, 0, 1, 1},
+    {&__pyx_kp_u_Magic, __pyx_k_Magic, sizeof(__pyx_k_Magic), 0, 1, 0, 0},
+    {&__pyx_n_s_MemoryError, __pyx_k_MemoryError, sizeof(__pyx_k_MemoryError), 0, 0, 1, 1},
     {&__pyx_kp_s_No_value_specified_for_struct_at, __pyx_k_No_value_specified_for_struct_at, sizeof(__pyx_k_No_value_specified_for_struct_at), 0, 0, 1, 0},
     {&__pyx_kp_s_No_value_specified_for_struct_at_2, __pyx_k_No_value_specified_for_struct_at_2, sizeof(__pyx_k_No_value_specified_for_struct_at_2), 0, 0, 1, 0},
+    {&__pyx_kp_u_Square, __pyx_k_Square, sizeof(__pyx_k_Square), 0, 1, 0, 0},
+    {&__pyx_kp_u_Testing_Magic, __pyx_k_Testing_Magic, sizeof(__pyx_k_Testing_Magic), 0, 1, 0, 0},
     {&__pyx_n_s_ValueError, __pyx_k_ValueError, sizeof(__pyx_k_ValueError), 0, 0, 1, 1},
+    {&__pyx_n_s_ZERO, __pyx_k_ZERO, sizeof(__pyx_k_ZERO), 0, 0, 1, 1},
     {&__pyx_kp_u__10, __pyx_k__10, sizeof(__pyx_k__10), 0, 1, 0, 0},
     {&__pyx_kp_u__11, __pyx_k__11, sizeof(__pyx_k__11), 0, 1, 0, 0},
-    {&__pyx_kp_u__12, __pyx_k__12, sizeof(__pyx_k__12), 0, 1, 0, 0},
-    {&__pyx_kp_u__14, __pyx_k__14, sizeof(__pyx_k__14), 0, 1, 0, 0},
-    {&__pyx_n_s__24, __pyx_k__24, sizeof(__pyx_k__24), 0, 0, 1, 1},
+    {&__pyx_kp_u__16, __pyx_k__16, sizeof(__pyx_k__16), 0, 1, 0, 0},
+    {&__pyx_kp_u__21, __pyx_k__21, sizeof(__pyx_k__21), 0, 1, 0, 0},
+    {&__pyx_kp_u__22, __pyx_k__22, sizeof(__pyx_k__22), 0, 1, 0, 0},
+    {&__pyx_kp_u__25, __pyx_k__25, sizeof(__pyx_k__25), 0, 1, 0, 0},
+    {&__pyx_n_s__26, __pyx_k__26, sizeof(__pyx_k__26), 0, 0, 1, 1},
+    {&__pyx_n_s__39, __pyx_k__39, sizeof(__pyx_k__39), 0, 0, 1, 1},
     {&__pyx_kp_u__4, __pyx_k__4, sizeof(__pyx_k__4), 0, 1, 0, 0},
     {&__pyx_kp_u__5, __pyx_k__5, sizeof(__pyx_k__5), 0, 1, 0, 0},
     {&__pyx_kp_u__6, __pyx_k__6, sizeof(__pyx_k__6), 0, 1, 0, 0},
     {&__pyx_kp_u__8, __pyx_k__8, sizeof(__pyx_k__8), 0, 1, 0, 0},
     {&__pyx_kp_u_a_b_c_d_e_f_g_h_i, __pyx_k_a_b_c_d_e_f_g_h_i, sizeof(__pyx_k_a_b_c_d_e_f_g_h_i), 0, 1, 0, 0},
+    {&__pyx_n_s_array, __pyx_k_array, sizeof(__pyx_k_array), 0, 0, 1, 1},
     {&__pyx_n_s_asyncio_coroutines, __pyx_k_asyncio_coroutines, sizeof(__pyx_k_asyncio_coroutines), 0, 0, 1, 1},
     {&__pyx_n_s_blockers, __pyx_k_blockers, sizeof(__pyx_k_blockers), 0, 0, 1, 1},
     {&__pyx_n_s_board, __pyx_k_board, sizeof(__pyx_k_board), 0, 0, 1, 1},
-    {&__pyx_n_s_build_tables, __pyx_k_build_tables, sizeof(__pyx_k_build_tables), 0, 0, 1, 1},
+    {&__pyx_kp_u_cdef_uint64_t_Magic_81, __pyx_k_cdef_uint64_t_Magic_81, sizeof(__pyx_k_cdef_uint64_t_Magic_81), 0, 1, 0, 0},
     {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
     {&__pyx_n_s_create_start_position, __pyx_k_create_start_position, sizeof(__pyx_k_create_start_position), 0, 0, 1, 1},
+    {&__pyx_n_s_desc, __pyx_k_desc, sizeof(__pyx_k_desc), 0, 0, 1, 1},
     {&__pyx_n_s_end, __pyx_k_end, sizeof(__pyx_k_end), 0, 0, 1, 1},
+    {&__pyx_kp_u_entries, __pyx_k_entries, sizeof(__pyx_k_entries), 0, 1, 0, 0},
+    {&__pyx_n_s_enumerate, __pyx_k_enumerate, sizeof(__pyx_k_enumerate), 0, 0, 1, 1},
     {&__pyx_n_s_file, __pyx_k_file, sizeof(__pyx_k_file), 0, 0, 1, 1},
+    {&__pyx_n_s_find_magics, __pyx_k_find_magics, sizeof(__pyx_k_find_magics), 0, 0, 1, 1},
     {&__pyx_n_s_high, __pyx_k_high, sizeof(__pyx_k_high), 0, 0, 1, 1},
     {&__pyx_kp_u_high_0x, __pyx_k_high_0x, sizeof(__pyx_k_high_0x), 0, 1, 0, 0},
     {&__pyx_n_s_i, __pyx_k_i, sizeof(__pyx_k_i), 0, 0, 1, 1},
+    {&__pyx_n_u_i, __pyx_k_i, sizeof(__pyx_k_i), 0, 1, 0, 1},
     {&__pyx_n_s_import, __pyx_k_import, sizeof(__pyx_k_import), 0, 0, 1, 1},
+    {&__pyx_n_s_initializing, __pyx_k_initializing, sizeof(__pyx_k_initializing), 0, 0, 1, 1},
     {&__pyx_n_s_is_coroutine, __pyx_k_is_coroutine, sizeof(__pyx_k_is_coroutine), 0, 0, 1, 1},
     {&__pyx_n_s_low, __pyx_k_low, sizeof(__pyx_k_low), 0, 0, 1, 1},
+    {&__pyx_n_s_magic, __pyx_k_magic, sizeof(__pyx_k_magic), 0, 0, 1, 1},
+    {&__pyx_n_u_magic, __pyx_k_magic, sizeof(__pyx_k_magic), 0, 1, 0, 1},
+    {&__pyx_n_s_magics, __pyx_k_magics, sizeof(__pyx_k_magics), 0, 0, 1, 1},
     {&__pyx_n_s_main, __pyx_k_main, sizeof(__pyx_k_main), 0, 0, 1, 1},
+    {&__pyx_n_s_max, __pyx_k_max, sizeof(__pyx_k_max), 0, 0, 1, 1},
+    {&__pyx_n_s_min, __pyx_k_min, sizeof(__pyx_k_min), 0, 0, 1, 1},
     {&__pyx_n_s_moves, __pyx_k_moves, sizeof(__pyx_k_moves), 0, 0, 1, 1},
     {&__pyx_n_s_name, __pyx_k_name, sizeof(__pyx_k_name), 0, 0, 1, 1},
     {&__pyx_kp_u_no_piece_on_square, __pyx_k_no_piece_on_square, sizeof(__pyx_k_no_piece_on_square), 0, 1, 0, 0},
@@ -6524,11 +9351,17 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_print_blocker_bits, __pyx_k_print_blocker_bits, sizeof(__pyx_k_print_blocker_bits), 0, 0, 1, 1},
     {&__pyx_n_s_print_blocker_masks, __pyx_k_print_blocker_masks, sizeof(__pyx_k_print_blocker_masks), 0, 0, 1, 1},
     {&__pyx_n_s_print_board, __pyx_k_print_board, sizeof(__pyx_k_print_board), 0, 0, 1, 1},
+    {&__pyx_n_s_py_build_bm_tables, __pyx_k_py_build_bm_tables, sizeof(__pyx_k_py_build_bm_tables), 0, 0, 1, 1},
     {&__pyx_n_s_r, __pyx_k_r, sizeof(__pyx_k_r), 0, 0, 1, 1},
+    {&__pyx_n_s_randint, __pyx_k_randint, sizeof(__pyx_k_randint), 0, 0, 1, 1},
+    {&__pyx_n_s_random, __pyx_k_random, sizeof(__pyx_k_random), 0, 0, 1, 1},
     {&__pyx_n_s_range, __pyx_k_range, sizeof(__pyx_k_range), 0, 0, 1, 1},
     {&__pyx_n_s_rank, __pyx_k_rank, sizeof(__pyx_k_rank), 0, 0, 1, 1},
+    {&__pyx_n_s_spec, __pyx_k_spec, sizeof(__pyx_k_spec), 0, 0, 1, 1},
     {&__pyx_n_s_sq, __pyx_k_sq, sizeof(__pyx_k_sq), 0, 0, 1, 1},
     {&__pyx_n_s_square, __pyx_k_square, sizeof(__pyx_k_square), 0, 0, 1, 1},
+    {&__pyx_n_s_square_array, __pyx_k_square_array, sizeof(__pyx_k_square_array), 0, 0, 1, 1},
+    {&__pyx_n_s_squares, __pyx_k_squares, sizeof(__pyx_k_squares), 0, 0, 1, 1},
     {&__pyx_n_s_tables, __pyx_k_tables, sizeof(__pyx_k_tables), 0, 0, 1, 1},
     {&__pyx_n_s_tablut, __pyx_k_tablut, sizeof(__pyx_k_tablut), 0, 0, 1, 1},
     {&__pyx_kp_s_tablut_pyx, __pyx_k_tablut_pyx, sizeof(__pyx_k_tablut_pyx), 0, 0, 1, 0},
@@ -6536,15 +9369,21 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_test_2, __pyx_k_test_2, sizeof(__pyx_k_test_2), 0, 0, 1, 1},
     {&__pyx_n_s_tmp, __pyx_k_tmp, sizeof(__pyx_k_tmp), 0, 0, 1, 1},
     {&__pyx_n_s_tqdm, __pyx_k_tqdm, sizeof(__pyx_k_tqdm), 0, 0, 1, 1},
+    {&__pyx_n_s_typing, __pyx_k_typing, sizeof(__pyx_k_typing), 0, 0, 1, 1},
+    {&__pyx_n_s_unit, __pyx_k_unit, sizeof(__pyx_k_unit), 0, 0, 1, 1},
     {0, 0, 0, 0, 0, 0, 0}
   };
   return __Pyx_InitStrings(__pyx_string_tab);
 }
 /* #### Code section: cached_builtins ### */
 static CYTHON_SMALL_CODE int __Pyx_InitCachedBuiltins(void) {
-  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) __PYX_ERR(0, 132, __pyx_L1_error)
-  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 184, __pyx_L1_error)
-  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_n_s_print); if (!__pyx_builtin_print) __PYX_ERR(0, 185, __pyx_L1_error)
+  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) __PYX_ERR(0, 142, __pyx_L1_error)
+  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 206, __pyx_L1_error)
+  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_n_s_print); if (!__pyx_builtin_print) __PYX_ERR(0, 207, __pyx_L1_error)
+  __pyx_builtin_MemoryError = __Pyx_GetBuiltinName(__pyx_n_s_MemoryError); if (!__pyx_builtin_MemoryError) __PYX_ERR(0, 414, __pyx_L1_error)
+  __pyx_builtin_min = __Pyx_GetBuiltinName(__pyx_n_s_min); if (!__pyx_builtin_min) __PYX_ERR(0, 510, __pyx_L1_error)
+  __pyx_builtin_max = __Pyx_GetBuiltinName(__pyx_n_s_max); if (!__pyx_builtin_max) __PYX_ERR(0, 510, __pyx_L1_error)
+  __pyx_builtin_enumerate = __Pyx_GetBuiltinName(__pyx_n_s_enumerate); if (!__pyx_builtin_enumerate) __PYX_ERR(0, 524, __pyx_L1_error)
   __pyx_builtin_KeyError = __Pyx_GetBuiltinName(__pyx_n_s_KeyError); if (!__pyx_builtin_KeyError) __PYX_ERR(1, 19, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
@@ -6578,112 +9417,226 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GOTREF(__pyx_tuple__2);
   __Pyx_GIVEREF(__pyx_tuple__2);
 
-  /* "tablut.pyx":132
+  /* "tablut.pyx":142
  *         board.high |= (<uint64_t>1) << (index - 63)
  *     else:
  *         raise ValueError("Bit index must be between 0 and 80")             # <<<<<<<<<<<<<<
  * 
  * cdef bint is_bit_set(Bitboard* board, int index):
  */
-  __pyx_tuple__3 = PyTuple_Pack(1, __pyx_kp_u_Bit_index_must_be_between_0_and); if (unlikely(!__pyx_tuple__3)) __PYX_ERR(0, 132, __pyx_L1_error)
+  __pyx_tuple__3 = PyTuple_Pack(1, __pyx_kp_u_Bit_index_must_be_between_0_and); if (unlikely(!__pyx_tuple__3)) __PYX_ERR(0, 142, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__3);
   __Pyx_GIVEREF(__pyx_tuple__3);
 
-  /* "tablut.pyx":190
+  /* "tablut.pyx":212
  *             print("1 " if is_bit_set(&board, sq) else ". ", end="")
  *         print()
  *     print("  a b c d e f g h i")             # <<<<<<<<<<<<<<
  *     print(f"Bitboard: {board.low} {board.high}")
  *     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")
  */
-  __pyx_tuple__7 = PyTuple_Pack(1, __pyx_kp_u_a_b_c_d_e_f_g_h_i); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(0, 190, __pyx_L1_error)
+  __pyx_tuple__7 = PyTuple_Pack(1, __pyx_kp_u_a_b_c_d_e_f_g_h_i); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(0, 212, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__7);
   __Pyx_GIVEREF(__pyx_tuple__7);
 
-  /* "tablut.pyx":281
+  /* "tablut.pyx":305
  *               set_bit(&blockers, j)
  *     else:
  *       print("no piece on square")             # <<<<<<<<<<<<<<
  * 
  *     return blockers
  */
-  __pyx_tuple__9 = PyTuple_Pack(1, __pyx_kp_u_no_piece_on_square); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(0, 281, __pyx_L1_error)
+  __pyx_tuple__9 = PyTuple_Pack(1, __pyx_kp_u_no_piece_on_square); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(0, 305, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__9);
   __Pyx_GIVEREF(__pyx_tuple__9);
 
-  /* "tablut.pyx":454
- *     print_board(tmp)
- *     print_board(tables.moves[0])
- *     print('----------------------------------')             # <<<<<<<<<<<<<<
- *     tmp.low = tables.blockers[10]
- *     print_board(tmp)
+  /* "tablut.pyx":352
+ *     """
+ *     cdef uint64_t r = 0
+ *     r = (random.randint(0, 0xFFFFFFFF) << 32) | random.randint(0, 0xFFFFFFFF)             # <<<<<<<<<<<<<<
+ *     return r
+ * 
  */
-  __pyx_tuple__13 = PyTuple_Pack(1, __pyx_kp_u__12); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(0, 454, __pyx_L1_error)
+  __pyx_tuple__12 = PyTuple_Pack(2, __pyx_int_0, __pyx_int_4294967295); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(0, 352, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__12);
+  __Pyx_GIVEREF(__pyx_tuple__12);
+
+  /* "tablut.pyx":414
+ *     if tables.blockers == NULL or tables.moves == NULL:
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for blocker move tables")             # <<<<<<<<<<<<<<
+ * 
+ *     while True:
+ */
+  __pyx_tuple__13 = PyTuple_Pack(1, __pyx_kp_u_Failed_to_allocate_memory_for_bl); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(0, 414, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__13);
   __Pyx_GIVEREF(__pyx_tuple__13);
 
-  /* "tablut.pyx":179
- *     return bitboard
+  /* "tablut.pyx":461
+ *     if used == NULL:
+ *         free_blocker_move_tables(&tables)
+ *         raise MemoryError("Failed to allocate memory for used array")             # <<<<<<<<<<<<<<
+ * 
+ *     try:
+ */
+  __pyx_tuple__14 = PyTuple_Pack(1, __pyx_kp_u_Failed_to_allocate_memory_for_us); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(0, 461, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__14);
+  __Pyx_GIVEREF(__pyx_tuple__14);
+
+  /* "tablut.pyx":465
+ *     try:
+ *         max = 0
+ *         for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):             # <<<<<<<<<<<<<<
+ *             magic = random_uint64_fewbits()
+ *             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+ */
+  __pyx_tuple__15 = PyTuple_Pack(1, __pyx_int_1000000000); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(0, 465, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__15);
+  __Pyx_GIVEREF(__pyx_tuple__15);
+
+  /* "tablut.pyx":506
+ * 
+ *     if squares is None:
+ *         squares = range(81)             # <<<<<<<<<<<<<<
+ * 
+ *     square_array = array.array('i', squares)
+ */
+  __pyx_tuple__17 = PyTuple_Pack(1, __pyx_int_81); if (unlikely(!__pyx_tuple__17)) __PYX_ERR(0, 506, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__17);
+  __Pyx_GIVEREF(__pyx_tuple__17);
+
+  /* "tablut.pyx":511
+ * 
+ *     if min(square_array) < 0 or max(square_array) > 80:
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")             # <<<<<<<<<<<<<<
+ * 
+ *     print("****FINDING MAGICS****\n")
+ */
+  __pyx_tuple__18 = PyTuple_Pack(1, __pyx_kp_u_Invalid_square_s_Must_be_0_squar); if (unlikely(!__pyx_tuple__18)) __PYX_ERR(0, 511, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__18);
+  __Pyx_GIVEREF(__pyx_tuple__18);
+
+  /* "tablut.pyx":513
+ *         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
+ * 
+ *     print("****FINDING MAGICS****\n")             # <<<<<<<<<<<<<<
+ * 
+ *     magics = []
+ */
+  __pyx_tuple__19 = PyTuple_Pack(1, __pyx_kp_u_FINDING_MAGICS); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(0, 513, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__19);
+  __Pyx_GIVEREF(__pyx_tuple__19);
+
+  /* "tablut.pyx":523
+ * 
+ *     if len(square_array) == 81 and list(square_array) == list(range(81)):
+ *         print("cdef uint64_t Magic[81] = {")             # <<<<<<<<<<<<<<
+ *         for i, magic in enumerate(magics):
+ *             if i % 4 == 0 and i != 0:
+ */
+  __pyx_tuple__20 = PyTuple_Pack(1, __pyx_kp_u_cdef_uint64_t_Magic_81); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(0, 523, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__20);
+  __Pyx_GIVEREF(__pyx_tuple__20);
+
+  /* "tablut.pyx":528
+ *                 print()
+ *             print(f"{magic},", end=" ")
+ *         print("\n}")             # <<<<<<<<<<<<<<
+ *     else:
+ *         for i in range(len(square_array)):
+ */
+  __pyx_tuple__23 = PyTuple_Pack(1, __pyx_kp_u__22); if (unlikely(!__pyx_tuple__23)) __PYX_ERR(0, 528, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__23);
+  __Pyx_GIVEREF(__pyx_tuple__23);
+
+  /* "tablut.pyx":533
+ *             print(f"Square {square_array[i]} Magic: {magics[i]}")
+ * 
+ *     print("\n****COMPLETE****")             # <<<<<<<<<<<<<<
+ * 
+ * #==============================================================================
+ */
+  __pyx_tuple__24 = PyTuple_Pack(1, __pyx_kp_u_COMPLETE); if (unlikely(!__pyx_tuple__24)) __PYX_ERR(0, 533, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__24);
+  __Pyx_GIVEREF(__pyx_tuple__24);
+
+  /* "tablut.pyx":201
+ *     return board_1.low == board_2.low and board_1.high == board_2.high
  * 
  * def create_start_position():             # <<<<<<<<<<<<<<
  *     return create_board()
  * 
  */
-  __pyx_codeobj__15 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_create_start_position, 179, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__15)) __PYX_ERR(0, 179, __pyx_L1_error)
+  __pyx_codeobj__27 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_create_start_position, 201, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__27)) __PYX_ERR(0, 201, __pyx_L1_error)
 
-  /* "tablut.pyx":182
+  /* "tablut.pyx":204
  *     return create_board()
  * 
  * def print_board(Bitboard board):             # <<<<<<<<<<<<<<
  *     cdef int rank, file, sq
  *     for rank in range(8, -1, -1):
  */
-  __pyx_tuple__16 = PyTuple_Pack(4, __pyx_n_s_board, __pyx_n_s_rank, __pyx_n_s_file, __pyx_n_s_sq); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(0, 182, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__16);
-  __Pyx_GIVEREF(__pyx_tuple__16);
-  __pyx_codeobj__17 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 4, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__16, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_board, 182, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__17)) __PYX_ERR(0, 182, __pyx_L1_error)
+  __pyx_tuple__28 = PyTuple_Pack(4, __pyx_n_s_board, __pyx_n_s_rank, __pyx_n_s_file, __pyx_n_s_sq); if (unlikely(!__pyx_tuple__28)) __PYX_ERR(0, 204, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__28);
+  __Pyx_GIVEREF(__pyx_tuple__28);
+  __pyx_codeobj__29 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 4, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__28, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_board, 204, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__29)) __PYX_ERR(0, 204, __pyx_L1_error)
 
-  /* "tablut.pyx":385
+  /* "tablut.pyx":495
+ *         free_blocker_move_tables(&tables)
+ * 
+ * def find_magics(squares=None):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-accessible function to print magic numbers for specified board squares.
+ */
+  __pyx_tuple__30 = PyTuple_Pack(6, __pyx_n_s_squares, __pyx_n_s_square_array, __pyx_n_s_square, __pyx_n_s_i, __pyx_n_s_magic, __pyx_n_s_magics); if (unlikely(!__pyx_tuple__30)) __PYX_ERR(0, 495, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__30);
+  __Pyx_GIVEREF(__pyx_tuple__30);
+  __pyx_codeobj__31 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 6, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__30, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_find_magics, 495, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__31)) __PYX_ERR(0, 495, __pyx_L1_error)
+  __pyx_tuple__32 = PyTuple_Pack(1, Py_None); if (unlikely(!__pyx_tuple__32)) __PYX_ERR(0, 495, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__32);
+  __Pyx_GIVEREF(__pyx_tuple__32);
+
+  /* "tablut.pyx":539
  * #==============================================================================
  * 
  * def print_blocker_masks():             # <<<<<<<<<<<<<<
- *     print_masks()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_MASK values
  */
-  __pyx_codeobj__18 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_blocker_masks, 385, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__18)) __PYX_ERR(0, 385, __pyx_L1_error)
+  __pyx_codeobj__33 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_blocker_masks, 539, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__33)) __PYX_ERR(0, 539, __pyx_L1_error)
 
-  /* "tablut.pyx":388
+  /* "tablut.pyx":545
  *     print_masks()
  * 
  * def print_blocker_bits():             # <<<<<<<<<<<<<<
- *     print_relevant_bits()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_BITS values
  */
-  __pyx_codeobj__19 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_blocker_bits, 388, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__19)) __PYX_ERR(0, 388, __pyx_L1_error)
+  __pyx_codeobj__34 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 0, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_print_blocker_bits, 545, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__34)) __PYX_ERR(0, 545, __pyx_L1_error)
 
-  /* "tablut.pyx":391
+  /* "tablut.pyx":551
  *     print_relevant_bits()
  * 
  * def test():             # <<<<<<<<<<<<<<
  *     cdef uint64_t r = random_u64()
  *     cdef Bitboard board = Bitboard(r, 0)
  */
-  __pyx_tuple__20 = PyTuple_Pack(2, __pyx_n_s_r, __pyx_n_s_board); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(0, 391, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__20);
-  __Pyx_GIVEREF(__pyx_tuple__20);
-  __pyx_codeobj__21 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__20, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_test, 391, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__21)) __PYX_ERR(0, 391, __pyx_L1_error)
+  __pyx_tuple__35 = PyTuple_Pack(2, __pyx_n_s_r, __pyx_n_s_board); if (unlikely(!__pyx_tuple__35)) __PYX_ERR(0, 551, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__35);
+  __Pyx_GIVEREF(__pyx_tuple__35);
+  __pyx_codeobj__36 = (PyObject*)__Pyx_PyCode_New(0, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__35, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_test, 551, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__36)) __PYX_ERR(0, 551, __pyx_L1_error)
 
-  /* "tablut.pyx":444
- *     tables.size = 0
+  /* "tablut.pyx":558
+ * #---------------------------------------------
  * 
- * def build_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard tmp = Bitboard(0,0)
- *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ * def py_build_bm_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
  */
-  __pyx_tuple__22 = PyTuple_Pack(7, __pyx_n_s_square, __pyx_n_s_tmp, __pyx_n_s_tables, __pyx_n_s_blockers, __pyx_n_s_moves, __pyx_n_s_i, __pyx_n_s_i); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(0, 444, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__22);
-  __Pyx_GIVEREF(__pyx_tuple__22);
-  __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 7, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_build_tables, 444, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 444, __pyx_L1_error)
+  __pyx_tuple__37 = PyTuple_Pack(7, __pyx_n_s_square, __pyx_n_s_tmp, __pyx_n_s_tables, __pyx_n_s_blockers, __pyx_n_s_moves, __pyx_n_s_i, __pyx_n_s_i); if (unlikely(!__pyx_tuple__37)) __PYX_ERR(0, 558, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__37);
+  __Pyx_GIVEREF(__pyx_tuple__37);
+  __pyx_codeobj__38 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 7, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__37, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_tablut_pyx, __pyx_n_s_py_build_bm_tables, 558, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__38)) __PYX_ERR(0, 558, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -6694,6 +9647,13 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
 static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   if (__Pyx_CreateStringTabAndInitStrings() < 0) __PYX_ERR(0, 1, __pyx_L1_error);
+  __pyx_int_0 = PyInt_FromLong(0); if (unlikely(!__pyx_int_0)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_32 = PyInt_FromLong(32); if (unlikely(!__pyx_int_32)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_80 = PyInt_FromLong(80); if (unlikely(!__pyx_int_80)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_81 = PyInt_FromLong(81); if (unlikely(!__pyx_int_81)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_1000000000 = PyInt_FromLong(1000000000L); if (unlikely(!__pyx_int_1000000000)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_4294967295 = PyInt_FromString((char *)"4294967295", 0, 0); if (unlikely(!__pyx_int_4294967295)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_0xff00000000000000 = PyInt_FromString((char *)"0xff00000000000000", 0, 0); if (unlikely(!__pyx_int_0xff00000000000000)) __PYX_ERR(0, 1, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
   return -1;
@@ -6753,7 +9713,7 @@ static int __Pyx_modinit_type_import_code(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__Pyx_modinit_type_import_code", 0);
   /*--- Type import code ---*/
-  __pyx_t_1 = PyImport_ImportModule(__Pyx_BUILTIN_MODULE_NAME); if (unlikely(!__pyx_t_1)) __PYX_ERR(2, 9, __pyx_L1_error)
+  __pyx_t_1 = PyImport_ImportModule(__Pyx_BUILTIN_MODULE_NAME); if (unlikely(!__pyx_t_1)) __PYX_ERR(4, 9, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_ptype_7cpython_4type_type = __Pyx_ImportType_3_0_11(__pyx_t_1, __Pyx_BUILTIN_MODULE_NAME, "type", 
   #if defined(PYPY_VERSION_NUM) && PYPY_VERSION_NUM < 0x050B0000
@@ -6763,7 +9723,19 @@ static int __Pyx_modinit_type_import_code(void) {
   #else
   sizeof(PyHeapTypeObject), __PYX_GET_STRUCT_ALIGNMENT_3_0_11(PyHeapTypeObject),
   #endif
-  __Pyx_ImportType_CheckSize_Warn_3_0_11); if (!__pyx_ptype_7cpython_4type_type) __PYX_ERR(2, 9, __pyx_L1_error)
+  __Pyx_ImportType_CheckSize_Warn_3_0_11); if (!__pyx_ptype_7cpython_4type_type) __PYX_ERR(4, 9, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = PyImport_ImportModule(__Pyx_BUILTIN_MODULE_NAME); if (unlikely(!__pyx_t_1)) __PYX_ERR(5, 8, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_ptype_7cpython_4bool_bool = __Pyx_ImportType_3_0_11(__pyx_t_1, __Pyx_BUILTIN_MODULE_NAME, "bool", sizeof(PyBoolObject), __PYX_GET_STRUCT_ALIGNMENT_3_0_11(PyBoolObject),__Pyx_ImportType_CheckSize_Warn_3_0_11); if (!__pyx_ptype_7cpython_4bool_bool) __PYX_ERR(5, 8, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = PyImport_ImportModule(__Pyx_BUILTIN_MODULE_NAME); if (unlikely(!__pyx_t_1)) __PYX_ERR(6, 15, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_ptype_7cpython_7complex_complex = __Pyx_ImportType_3_0_11(__pyx_t_1, __Pyx_BUILTIN_MODULE_NAME, "complex", sizeof(PyComplexObject), __PYX_GET_STRUCT_ALIGNMENT_3_0_11(PyComplexObject),__Pyx_ImportType_CheckSize_Warn_3_0_11); if (!__pyx_ptype_7cpython_7complex_complex) __PYX_ERR(6, 15, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = PyImport_ImportModule("array"); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 69, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_ptype_7cpython_5array_array = __Pyx_ImportType_3_0_11(__pyx_t_1, "array", "array", sizeof(arrayobject), __PYX_GET_STRUCT_ALIGNMENT_3_0_11(arrayobject),__Pyx_ImportType_CheckSize_Warn_3_0_11); if (!__pyx_ptype_7cpython_5array_array) __PYX_ERR(3, 69, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_RefNannyFinishContext();
   return 0;
@@ -6954,7 +9926,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec_tablut(PyObject *__pyx_pyinit_modu
   PyObject *__pyx_t_2 = NULL;
   PyObject *__pyx_t_3 = NULL;
   struct __pyx_t_6tablut_Bitboard __pyx_t_4;
-  struct __pyx_t_6tablut_Bitboard __pyx_t_5;
+  uint64_t __pyx_t_5;
   struct __pyx_t_6tablut_Bitboard __pyx_t_6;
   struct __pyx_t_6tablut_Bitboard __pyx_t_7;
   struct __pyx_t_6tablut_Bitboard __pyx_t_8;
@@ -7034,8 +10006,9 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec_tablut(PyObject *__pyx_pyinit_modu
   struct __pyx_t_6tablut_Bitboard __pyx_t_82;
   struct __pyx_t_6tablut_Bitboard __pyx_t_83;
   struct __pyx_t_6tablut_Bitboard __pyx_t_84;
-  static struct __pyx_t_6tablut_Bitboard __pyx_t_85[81];
-  static int __pyx_t_86[81];
+  struct __pyx_t_6tablut_Bitboard __pyx_t_85;
+  static struct __pyx_t_6tablut_Bitboard __pyx_t_86[81];
+  static int __pyx_t_87[81];
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -7172,7 +10145,83 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "tablut.pyx":26
+  /* "tablut.pyx":14
+ * from libc.stdlib cimport rand
+ * from libc.stddef cimport size_t
+ * import random             # <<<<<<<<<<<<<<
+ * from typing import List
+ * from cpython cimport array
+ */
+  __pyx_t_3 = __Pyx_ImportDottedModule(__pyx_n_s_random, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 14, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_random, __pyx_t_3) < 0) __PYX_ERR(0, 14, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+  /* "tablut.pyx":15
+ * from libc.stddef cimport size_t
+ * import random
+ * from typing import List             # <<<<<<<<<<<<<<
+ * from cpython cimport array
+ * import array
+ */
+  __pyx_t_3 = PyList_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 15, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_INCREF(__pyx_n_s_List);
+  __Pyx_GIVEREF(__pyx_n_s_List);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_3, 0, __pyx_n_s_List)) __PYX_ERR(0, 15, __pyx_L1_error);
+  __pyx_t_2 = __Pyx_Import(__pyx_n_s_typing, __pyx_t_3, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 15, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = __Pyx_ImportFrom(__pyx_t_2, __pyx_n_s_List); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 15, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_List, __pyx_t_3) < 0) __PYX_ERR(0, 15, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "tablut.pyx":17
+ * from typing import List
+ * from cpython cimport array
+ * import array             # <<<<<<<<<<<<<<
+ * 
+ * # TO UPDATE CYTHON CODE USE BELOW
+ */
+  __pyx_t_2 = __Pyx_ImportDottedModule(__pyx_n_s_array, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 17, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_array, __pyx_t_2) < 0) __PYX_ERR(0, 17, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "tablut.pyx":25
+ * # Bitboard Struct and Mask Constants
+ * #------------------------------------------------------------------------------
+ * ZERO = <uint64_t>0             # <<<<<<<<<<<<<<
+ * 
+ * cdef struct Bitboard:
+ */
+  __pyx_t_2 = __Pyx_PyInt_From_uint64_t(((uint64_t)0)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_ZERO, __pyx_t_2) < 0) __PYX_ERR(0, 25, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "tablut.pyx":31
+ *     uint64_t high
+ * 
+ * cdef Bitboard EMPTY_BITBOARD = Bitboard(ZERO, ZERO)             # <<<<<<<<<<<<<<
+ * 
+ * cdef Bitboard[81] BLOCKER_MASK = [
+ */
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_ZERO); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 31, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_5 = __Pyx_PyInt_As_uint64_t(__pyx_t_2); if (unlikely((__pyx_t_5 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 31, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_4.low = __pyx_t_5;
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_ZERO); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 31, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_5 = __Pyx_PyInt_As_uint64_t(__pyx_t_2); if (unlikely((__pyx_t_5 == ((uint64_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 31, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_4.high = __pyx_t_5;
+  __pyx_v_6tablut_EMPTY_BITBOARD = __pyx_t_4;
+
+  /* "tablut.pyx":34
  * 
  * cdef Bitboard[81] BLOCKER_MASK = [
  *     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
@@ -7182,1067 +10231,1080 @@ if (!__Pyx_RefNanny) {
   __pyx_t_4.low = 0x00402010080402FE;
   __pyx_t_4.high = 0x0000000000000001;
 
-  /* "tablut.pyx":27
+  /* "tablut.pyx":35
  * cdef Bitboard[81] BLOCKER_MASK = [
  *     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804020100804FC, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x01008040201008FA, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010080402010F6, high = 0x0000000000000008),
  */
-  __pyx_t_5.low = 0x00804020100804FC;
-  __pyx_t_5.high = 0x0000000000000002;
+  __pyx_t_6.low = 0x00804020100804FC;
+  __pyx_t_6.high = 0x0000000000000002;
 
-  /* "tablut.pyx":28
+  /* "tablut.pyx":36
  *     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804020100804FC, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008040201008FA, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x02010080402010F6, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020100804020EE, high = 0x0000000000000010),
  */
-  __pyx_t_6.low = 0x01008040201008FA;
-  __pyx_t_6.high = 0x0000000000000004;
+  __pyx_t_7.low = 0x01008040201008FA;
+  __pyx_t_7.high = 0x0000000000000004;
 
-  /* "tablut.pyx":29
+  /* "tablut.pyx":37
  *     Bitboard(low = 0x00804020100804FC, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008040201008FA, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010080402010F6, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x04020100804020EE, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040201008040DE, high = 0x0000000000000020),
  */
-  __pyx_t_7.low = 0x02010080402010F6;
-  __pyx_t_7.high = 0x0000000000000008;
+  __pyx_t_8.low = 0x02010080402010F6;
+  __pyx_t_8.high = 0x0000000000000008;
 
-  /* "tablut.pyx":30
+  /* "tablut.pyx":38
  *     Bitboard(low = 0x01008040201008FA, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010080402010F6, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020100804020EE, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x08040201008040DE, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080402010080BE, high = 0x0000000000000040),
  */
-  __pyx_t_8.low = 0x04020100804020EE;
-  __pyx_t_8.high = 0x0000000000000010;
+  __pyx_t_9.low = 0x04020100804020EE;
+  __pyx_t_9.high = 0x0000000000000010;
 
-  /* "tablut.pyx":31
+  /* "tablut.pyx":39
  *     Bitboard(low = 0x02010080402010F6, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020100804020EE, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040201008040DE, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x10080402010080BE, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040201007E, high = 0x0000000000000080),
  */
-  __pyx_t_9.low = 0x08040201008040DE;
-  __pyx_t_9.high = 0x0000000000000020;
+  __pyx_t_10.low = 0x08040201008040DE;
+  __pyx_t_10.high = 0x0000000000000020;
 
-  /* "tablut.pyx":32
+  /* "tablut.pyx":40
  *     Bitboard(low = 0x04020100804020EE, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040201008040DE, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080402010080BE, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x201008040201007E, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201008040200FE, high = 0x0000000000000100),
  */
-  __pyx_t_10.low = 0x10080402010080BE;
-  __pyx_t_10.high = 0x0000000000000040;
+  __pyx_t_11.low = 0x10080402010080BE;
+  __pyx_t_11.high = 0x0000000000000040;
 
-  /* "tablut.pyx":33
+  /* "tablut.pyx":41
  *     Bitboard(low = 0x08040201008040DE, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080402010080BE, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040201007E, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x40201008040200FE, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100805FC00, high = 0x0000000000000001),
  */
-  __pyx_t_11.low = 0x201008040201007E;
-  __pyx_t_11.high = 0x0000000000000080;
+  __pyx_t_12.low = 0x201008040201007E;
+  __pyx_t_12.high = 0x0000000000000080;
 
-  /* "tablut.pyx":34
+  /* "tablut.pyx":42
  *     Bitboard(low = 0x10080402010080BE, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040201007E, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201008040200FE, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x004020100805FC00, high = 0x0000000000000001),
  *     Bitboard(low = 0x008040201009F800, high = 0x0000000000000002),
  */
-  __pyx_t_12.low = 0x40201008040200FE;
-  __pyx_t_12.high = 0x0000000000000100;
+  __pyx_t_13.low = 0x40201008040200FE;
+  __pyx_t_13.high = 0x0000000000000100;
 
-  /* "tablut.pyx":35
+  /* "tablut.pyx":43
  *     Bitboard(low = 0x201008040201007E, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201008040200FE, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100805FC00, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x008040201009F800, high = 0x0000000000000002),
  *     Bitboard(low = 0x010080402011F400, high = 0x0000000000000004),
  */
-  __pyx_t_13.low = 0x004020100805FC00;
-  __pyx_t_13.high = 0x0000000000000001;
+  __pyx_t_14.low = 0x004020100805FC00;
+  __pyx_t_14.high = 0x0000000000000001;
 
-  /* "tablut.pyx":36
+  /* "tablut.pyx":44
  *     Bitboard(low = 0x40201008040200FE, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100805FC00, high = 0x0000000000000001),
  *     Bitboard(low = 0x008040201009F800, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x010080402011F400, high = 0x0000000000000004),
  *     Bitboard(low = 0x020100804021EC00, high = 0x0000000000000008),
  */
-  __pyx_t_14.low = 0x008040201009F800;
-  __pyx_t_14.high = 0x0000000000000002;
+  __pyx_t_15.low = 0x008040201009F800;
+  __pyx_t_15.high = 0x0000000000000002;
 
-  /* "tablut.pyx":37
+  /* "tablut.pyx":45
  *     Bitboard(low = 0x004020100805FC00, high = 0x0000000000000001),
  *     Bitboard(low = 0x008040201009F800, high = 0x0000000000000002),
  *     Bitboard(low = 0x010080402011F400, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x020100804021EC00, high = 0x0000000000000008),
  *     Bitboard(low = 0x040201008041DC00, high = 0x0000000000000010),
  */
-  __pyx_t_15.low = 0x010080402011F400;
-  __pyx_t_15.high = 0x0000000000000004;
+  __pyx_t_16.low = 0x010080402011F400;
+  __pyx_t_16.high = 0x0000000000000004;
 
-  /* "tablut.pyx":38
+  /* "tablut.pyx":46
  *     Bitboard(low = 0x008040201009F800, high = 0x0000000000000002),
  *     Bitboard(low = 0x010080402011F400, high = 0x0000000000000004),
  *     Bitboard(low = 0x020100804021EC00, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x040201008041DC00, high = 0x0000000000000010),
  *     Bitboard(low = 0x080402010081BC00, high = 0x0000000000000020),
  */
-  __pyx_t_16.low = 0x020100804021EC00;
-  __pyx_t_16.high = 0x0000000000000008;
+  __pyx_t_17.low = 0x020100804021EC00;
+  __pyx_t_17.high = 0x0000000000000008;
 
-  /* "tablut.pyx":39
+  /* "tablut.pyx":47
  *     Bitboard(low = 0x010080402011F400, high = 0x0000000000000004),
  *     Bitboard(low = 0x020100804021EC00, high = 0x0000000000000008),
  *     Bitboard(low = 0x040201008041DC00, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x080402010081BC00, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040201017C00, high = 0x0000000000000040),
  */
-  __pyx_t_17.low = 0x040201008041DC00;
-  __pyx_t_17.high = 0x0000000000000010;
+  __pyx_t_18.low = 0x040201008041DC00;
+  __pyx_t_18.high = 0x0000000000000010;
 
-  /* "tablut.pyx":40
+  /* "tablut.pyx":48
  *     Bitboard(low = 0x020100804021EC00, high = 0x0000000000000008),
  *     Bitboard(low = 0x040201008041DC00, high = 0x0000000000000010),
  *     Bitboard(low = 0x080402010081BC00, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1008040201017C00, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040200FC00, high = 0x0000000000000080),
  */
-  __pyx_t_18.low = 0x080402010081BC00;
-  __pyx_t_18.high = 0x0000000000000020;
+  __pyx_t_19.low = 0x080402010081BC00;
+  __pyx_t_19.high = 0x0000000000000020;
 
-  /* "tablut.pyx":41
+  /* "tablut.pyx":49
  *     Bitboard(low = 0x040201008041DC00, high = 0x0000000000000010),
  *     Bitboard(low = 0x080402010081BC00, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040201017C00, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x201008040200FC00, high = 0x0000000000000080),
  *     Bitboard(low = 0x402010080401FC00, high = 0x0000000000000100),
  */
-  __pyx_t_19.low = 0x1008040201017C00;
-  __pyx_t_19.high = 0x0000000000000040;
+  __pyx_t_20.low = 0x1008040201017C00;
+  __pyx_t_20.high = 0x0000000000000040;
 
-  /* "tablut.pyx":42
+  /* "tablut.pyx":50
  *     Bitboard(low = 0x080402010081BC00, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040201017C00, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040200FC00, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x402010080401FC00, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100BF80200, high = 0x0000000000000001),
  */
-  __pyx_t_20.low = 0x201008040200FC00;
-  __pyx_t_20.high = 0x0000000000000080;
+  __pyx_t_21.low = 0x201008040200FC00;
+  __pyx_t_21.high = 0x0000000000000080;
 
-  /* "tablut.pyx":43
+  /* "tablut.pyx":51
  *     Bitboard(low = 0x1008040201017C00, high = 0x0000000000000040),
  *     Bitboard(low = 0x201008040200FC00, high = 0x0000000000000080),
  *     Bitboard(low = 0x402010080401FC00, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x004020100BF80200, high = 0x0000000000000001),
  *     Bitboard(low = 0x0080402013F00400, high = 0x0000000000000002),
  */
-  __pyx_t_21.low = 0x402010080401FC00;
-  __pyx_t_21.high = 0x0000000000000100;
+  __pyx_t_22.low = 0x402010080401FC00;
+  __pyx_t_22.high = 0x0000000000000100;
 
-  /* "tablut.pyx":44
+  /* "tablut.pyx":52
  *     Bitboard(low = 0x201008040200FC00, high = 0x0000000000000080),
  *     Bitboard(low = 0x402010080401FC00, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100BF80200, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0080402013F00400, high = 0x0000000000000002),
  *     Bitboard(low = 0x0100804023E80800, high = 0x0000000000000004),
  */
-  __pyx_t_22.low = 0x004020100BF80200;
-  __pyx_t_22.high = 0x0000000000000001;
+  __pyx_t_23.low = 0x004020100BF80200;
+  __pyx_t_23.high = 0x0000000000000001;
 
-  /* "tablut.pyx":45
+  /* "tablut.pyx":53
  *     Bitboard(low = 0x402010080401FC00, high = 0x0000000000000100),
  *     Bitboard(low = 0x004020100BF80200, high = 0x0000000000000001),
  *     Bitboard(low = 0x0080402013F00400, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0100804023E80800, high = 0x0000000000000004),
  *     Bitboard(low = 0x0201008043D81000, high = 0x0000000000000008),
  */
-  __pyx_t_23.low = 0x0080402013F00400;
-  __pyx_t_23.high = 0x0000000000000002;
+  __pyx_t_24.low = 0x0080402013F00400;
+  __pyx_t_24.high = 0x0000000000000002;
 
-  /* "tablut.pyx":46
+  /* "tablut.pyx":54
  *     Bitboard(low = 0x004020100BF80200, high = 0x0000000000000001),
  *     Bitboard(low = 0x0080402013F00400, high = 0x0000000000000002),
  *     Bitboard(low = 0x0100804023E80800, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0201008043D81000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010083B82000, high = 0x0000000000000010),
  */
-  __pyx_t_24.low = 0x0100804023E80800;
-  __pyx_t_24.high = 0x0000000000000004;
+  __pyx_t_25.low = 0x0100804023E80800;
+  __pyx_t_25.high = 0x0000000000000004;
 
-  /* "tablut.pyx":47
+  /* "tablut.pyx":55
  *     Bitboard(low = 0x0080402013F00400, high = 0x0000000000000002),
  *     Bitboard(low = 0x0100804023E80800, high = 0x0000000000000004),
  *     Bitboard(low = 0x0201008043D81000, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0402010083B82000, high = 0x0000000000000010),
  *     Bitboard(low = 0x0804020103784000, high = 0x0000000000000020),
  */
-  __pyx_t_25.low = 0x0201008043D81000;
-  __pyx_t_25.high = 0x0000000000000008;
+  __pyx_t_26.low = 0x0201008043D81000;
+  __pyx_t_26.high = 0x0000000000000008;
 
-  /* "tablut.pyx":48
+  /* "tablut.pyx":56
  *     Bitboard(low = 0x0100804023E80800, high = 0x0000000000000004),
  *     Bitboard(low = 0x0201008043D81000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010083B82000, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0804020103784000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040202F88000, high = 0x0000000000000040),
  */
-  __pyx_t_26.low = 0x0402010083B82000;
-  __pyx_t_26.high = 0x0000000000000010;
+  __pyx_t_27.low = 0x0402010083B82000;
+  __pyx_t_27.high = 0x0000000000000010;
 
-  /* "tablut.pyx":49
+  /* "tablut.pyx":57
  *     Bitboard(low = 0x0201008043D81000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010083B82000, high = 0x0000000000000010),
  *     Bitboard(low = 0x0804020103784000, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1008040202F88000, high = 0x0000000000000040),
  *     Bitboard(low = 0x2010080401F90000, high = 0x0000000000000080),
  */
-  __pyx_t_27.low = 0x0804020103784000;
-  __pyx_t_27.high = 0x0000000000000020;
+  __pyx_t_28.low = 0x0804020103784000;
+  __pyx_t_28.high = 0x0000000000000020;
 
-  /* "tablut.pyx":50
+  /* "tablut.pyx":58
  *     Bitboard(low = 0x0402010083B82000, high = 0x0000000000000010),
  *     Bitboard(low = 0x0804020103784000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040202F88000, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x2010080401F90000, high = 0x0000000000000080),
  *     Bitboard(low = 0x4020100803FA0000, high = 0x0000000000000100),
  */
-  __pyx_t_28.low = 0x1008040202F88000;
-  __pyx_t_28.high = 0x0000000000000040;
+  __pyx_t_29.low = 0x1008040202F88000;
+  __pyx_t_29.high = 0x0000000000000040;
 
-  /* "tablut.pyx":51
+  /* "tablut.pyx":59
  *     Bitboard(low = 0x0804020103784000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1008040202F88000, high = 0x0000000000000040),
  *     Bitboard(low = 0x2010080401F90000, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x4020100803FA0000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402017F0040200, high = 0x0000000000000001),
  */
-  __pyx_t_29.low = 0x2010080401F90000;
-  __pyx_t_29.high = 0x0000000000000080;
+  __pyx_t_30.low = 0x2010080401F90000;
+  __pyx_t_30.high = 0x0000000000000080;
 
-  /* "tablut.pyx":52
+  /* "tablut.pyx":60
  *     Bitboard(low = 0x1008040202F88000, high = 0x0000000000000040),
  *     Bitboard(low = 0x2010080401F90000, high = 0x0000000000000080),
  *     Bitboard(low = 0x4020100803FA0000, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x00402017F0040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804027E0080400, high = 0x0000000000000002),
  */
-  __pyx_t_30.low = 0x4020100803FA0000;
-  __pyx_t_30.high = 0x0000000000000100;
+  __pyx_t_31.low = 0x4020100803FA0000;
+  __pyx_t_31.high = 0x0000000000000100;
 
-  /* "tablut.pyx":53
+  /* "tablut.pyx":61
  *     Bitboard(low = 0x2010080401F90000, high = 0x0000000000000080),
  *     Bitboard(low = 0x4020100803FA0000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402017F0040200, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x00804027E0080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008047D0100800, high = 0x0000000000000004),
  */
-  __pyx_t_31.low = 0x00402017F0040200;
-  __pyx_t_31.high = 0x0000000000000001;
+  __pyx_t_32.low = 0x00402017F0040200;
+  __pyx_t_32.high = 0x0000000000000001;
 
-  /* "tablut.pyx":54
+  /* "tablut.pyx":62
  *     Bitboard(low = 0x4020100803FA0000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402017F0040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804027E0080400, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x01008047D0100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010087B0201000, high = 0x0000000000000008),
  */
-  __pyx_t_32.low = 0x00804027E0080400;
-  __pyx_t_32.high = 0x0000000000000002;
+  __pyx_t_33.low = 0x00804027E0080400;
+  __pyx_t_33.high = 0x0000000000000002;
 
-  /* "tablut.pyx":55
+  /* "tablut.pyx":63
  *     Bitboard(low = 0x00402017F0040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804027E0080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008047D0100800, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x02010087B0201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010770402000, high = 0x0000000000000010),
  */
-  __pyx_t_33.low = 0x01008047D0100800;
-  __pyx_t_33.high = 0x0000000000000004;
+  __pyx_t_34.low = 0x01008047D0100800;
+  __pyx_t_34.high = 0x0000000000000004;
 
-  /* "tablut.pyx":56
+  /* "tablut.pyx":64
  *     Bitboard(low = 0x00804027E0080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008047D0100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010087B0201000, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0402010770402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040206F0804000, high = 0x0000000000000020),
  */
-  __pyx_t_34.low = 0x02010087B0201000;
-  __pyx_t_34.high = 0x0000000000000008;
+  __pyx_t_35.low = 0x02010087B0201000;
+  __pyx_t_35.high = 0x0000000000000008;
 
-  /* "tablut.pyx":57
+  /* "tablut.pyx":65
  *     Bitboard(low = 0x01008047D0100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010087B0201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010770402000, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x08040206F0804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080405F1008000, high = 0x0000000000000040),
  */
-  __pyx_t_35.low = 0x0402010770402000;
-  __pyx_t_35.high = 0x0000000000000010;
+  __pyx_t_36.low = 0x0402010770402000;
+  __pyx_t_36.high = 0x0000000000000010;
 
-  /* "tablut.pyx":58
+  /* "tablut.pyx":66
  *     Bitboard(low = 0x02010087B0201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x0402010770402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040206F0804000, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x10080405F1008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x20100803F2010000, high = 0x0000000000000080),
  */
-  __pyx_t_36.low = 0x08040206F0804000;
-  __pyx_t_36.high = 0x0000000000000020;
+  __pyx_t_37.low = 0x08040206F0804000;
+  __pyx_t_37.high = 0x0000000000000020;
 
-  /* "tablut.pyx":59
+  /* "tablut.pyx":67
  *     Bitboard(low = 0x0402010770402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040206F0804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080405F1008000, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x20100803F2010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201007F4020000, high = 0x0000000000000100),
  */
-  __pyx_t_37.low = 0x10080405F1008000;
-  __pyx_t_37.high = 0x0000000000000040;
+  __pyx_t_38.low = 0x10080405F1008000;
+  __pyx_t_38.high = 0x0000000000000040;
 
-  /* "tablut.pyx":60
+  /* "tablut.pyx":68
  *     Bitboard(low = 0x08040206F0804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080405F1008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x20100803F2010000, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x40201007F4020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402FE008040200, high = 0x0000000000000001),
  */
-  __pyx_t_38.low = 0x20100803F2010000;
-  __pyx_t_38.high = 0x0000000000000080;
+  __pyx_t_39.low = 0x20100803F2010000;
+  __pyx_t_39.high = 0x0000000000000080;
 
-  /* "tablut.pyx":61
+  /* "tablut.pyx":69
  *     Bitboard(low = 0x10080405F1008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x20100803F2010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201007F4020000, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x00402FE008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804FC010080400, high = 0x0000000000000002),
  */
-  __pyx_t_39.low = 0x40201007F4020000;
-  __pyx_t_39.high = 0x0000000000000100;
+  __pyx_t_40.low = 0x40201007F4020000;
+  __pyx_t_40.high = 0x0000000000000100;
 
-  /* "tablut.pyx":62
+  /* "tablut.pyx":70
  *     Bitboard(low = 0x20100803F2010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40201007F4020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402FE008040200, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x00804FC010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008FA020100800, high = 0x0000000000000004),
  */
-  __pyx_t_40.low = 0x00402FE008040200;
-  __pyx_t_40.high = 0x0000000000000001;
+  __pyx_t_41.low = 0x00402FE008040200;
+  __pyx_t_41.high = 0x0000000000000001;
 
-  /* "tablut.pyx":63
+  /* "tablut.pyx":71
  *     Bitboard(low = 0x40201007F4020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x00402FE008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804FC010080400, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x01008FA020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010F6040201000, high = 0x0000000000000008),
  */
-  __pyx_t_41.low = 0x00804FC010080400;
-  __pyx_t_41.high = 0x0000000000000002;
+  __pyx_t_42.low = 0x00804FC010080400;
+  __pyx_t_42.high = 0x0000000000000002;
 
-  /* "tablut.pyx":64
+  /* "tablut.pyx":72
  *     Bitboard(low = 0x00402FE008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804FC010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008FA020100800, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x02010F6040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020EE080402000, high = 0x0000000000000010),
  */
-  __pyx_t_42.low = 0x01008FA020100800;
-  __pyx_t_42.high = 0x0000000000000004;
+  __pyx_t_43.low = 0x01008FA020100800;
+  __pyx_t_43.high = 0x0000000000000004;
 
-  /* "tablut.pyx":65
+  /* "tablut.pyx":73
  *     Bitboard(low = 0x00804FC010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x01008FA020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010F6040201000, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x04020EE080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040DE100804000, high = 0x0000000000000020),
  */
-  __pyx_t_43.low = 0x02010F6040201000;
-  __pyx_t_43.high = 0x0000000000000008;
+  __pyx_t_44.low = 0x02010F6040201000;
+  __pyx_t_44.high = 0x0000000000000008;
 
-  /* "tablut.pyx":66
+  /* "tablut.pyx":74
  *     Bitboard(low = 0x01008FA020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x02010F6040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020EE080402000, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x08040DE100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080BE201008000, high = 0x0000000000000040),
  */
-  __pyx_t_44.low = 0x04020EE080402000;
-  __pyx_t_44.high = 0x0000000000000010;
+  __pyx_t_45.low = 0x04020EE080402000;
+  __pyx_t_45.high = 0x0000000000000010;
 
-  /* "tablut.pyx":67
+  /* "tablut.pyx":75
  *     Bitboard(low = 0x02010F6040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x04020EE080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040DE100804000, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x10080BE201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x201007E402010000, high = 0x0000000000000080),
  */
-  __pyx_t_45.low = 0x08040DE100804000;
-  __pyx_t_45.high = 0x0000000000000020;
+  __pyx_t_46.low = 0x08040DE100804000;
+  __pyx_t_46.high = 0x0000000000000020;
 
-  /* "tablut.pyx":68
+  /* "tablut.pyx":76
  *     Bitboard(low = 0x04020EE080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x08040DE100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080BE201008000, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x201007E402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40200FE804020000, high = 0x0000000000000100),
  */
-  __pyx_t_46.low = 0x10080BE201008000;
-  __pyx_t_46.high = 0x0000000000000040;
+  __pyx_t_47.low = 0x10080BE201008000;
+  __pyx_t_47.high = 0x0000000000000040;
 
-  /* "tablut.pyx":69
+  /* "tablut.pyx":77
  *     Bitboard(low = 0x08040DE100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x10080BE201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x201007E402010000, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x40200FE804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x005FC01008040200, high = 0x0000000000000001),
  */
-  __pyx_t_47.low = 0x201007E402010000;
-  __pyx_t_47.high = 0x0000000000000080;
+  __pyx_t_48.low = 0x201007E402010000;
+  __pyx_t_48.high = 0x0000000000000080;
 
-  /* "tablut.pyx":70
+  /* "tablut.pyx":78
  *     Bitboard(low = 0x10080BE201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x201007E402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40200FE804020000, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x005FC01008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x009F802010080400, high = 0x0000000000000002),
  */
-  __pyx_t_48.low = 0x40200FE804020000;
-  __pyx_t_48.high = 0x0000000000000100;
+  __pyx_t_49.low = 0x40200FE804020000;
+  __pyx_t_49.high = 0x0000000000000100;
 
-  /* "tablut.pyx":71
+  /* "tablut.pyx":79
  *     Bitboard(low = 0x201007E402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x40200FE804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x005FC01008040200, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x009F802010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x011F404020100800, high = 0x0000000000000004),
  */
-  __pyx_t_49.low = 0x005FC01008040200;
-  __pyx_t_49.high = 0x0000000000000001;
+  __pyx_t_50.low = 0x005FC01008040200;
+  __pyx_t_50.high = 0x0000000000000001;
 
-  /* "tablut.pyx":72
+  /* "tablut.pyx":80
  *     Bitboard(low = 0x40200FE804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x005FC01008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x009F802010080400, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x011F404020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x021EC08040201000, high = 0x0000000000000008),
  */
-  __pyx_t_50.low = 0x009F802010080400;
-  __pyx_t_50.high = 0x0000000000000002;
+  __pyx_t_51.low = 0x009F802010080400;
+  __pyx_t_51.high = 0x0000000000000002;
 
-  /* "tablut.pyx":73
+  /* "tablut.pyx":81
  *     Bitboard(low = 0x005FC01008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x009F802010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x011F404020100800, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x021EC08040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x041DC10080402000, high = 0x0000000000000010),
  */
-  __pyx_t_51.low = 0x011F404020100800;
-  __pyx_t_51.high = 0x0000000000000004;
+  __pyx_t_52.low = 0x011F404020100800;
+  __pyx_t_52.high = 0x0000000000000004;
 
-  /* "tablut.pyx":74
+  /* "tablut.pyx":82
  *     Bitboard(low = 0x009F802010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x011F404020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x021EC08040201000, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x041DC10080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x081BC20100804000, high = 0x0000000000000020),
  */
-  __pyx_t_52.low = 0x021EC08040201000;
-  __pyx_t_52.high = 0x0000000000000008;
+  __pyx_t_53.low = 0x021EC08040201000;
+  __pyx_t_53.high = 0x0000000000000008;
 
-  /* "tablut.pyx":75
+  /* "tablut.pyx":83
  *     Bitboard(low = 0x011F404020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x021EC08040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x041DC10080402000, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x081BC20100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1017C40201008000, high = 0x0000000000000040),
  */
-  __pyx_t_53.low = 0x041DC10080402000;
-  __pyx_t_53.high = 0x0000000000000010;
+  __pyx_t_54.low = 0x041DC10080402000;
+  __pyx_t_54.high = 0x0000000000000010;
 
-  /* "tablut.pyx":76
+  /* "tablut.pyx":84
  *     Bitboard(low = 0x021EC08040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x041DC10080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x081BC20100804000, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1017C40201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x200FC80402010000, high = 0x0000000000000080),
  */
-  __pyx_t_54.low = 0x081BC20100804000;
-  __pyx_t_54.high = 0x0000000000000020;
+  __pyx_t_55.low = 0x081BC20100804000;
+  __pyx_t_55.high = 0x0000000000000020;
 
-  /* "tablut.pyx":77
+  /* "tablut.pyx":85
  *     Bitboard(low = 0x041DC10080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x081BC20100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1017C40201008000, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x200FC80402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x401FD00804020000, high = 0x0000000000000100),
  */
-  __pyx_t_55.low = 0x1017C40201008000;
-  __pyx_t_55.high = 0x0000000000000040;
+  __pyx_t_56.low = 0x1017C40201008000;
+  __pyx_t_56.high = 0x0000000000000040;
 
-  /* "tablut.pyx":78
+  /* "tablut.pyx":86
  *     Bitboard(low = 0x081BC20100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x1017C40201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x200FC80402010000, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x401FD00804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x3F80201008040200, high = 0x0000000000000001),
  */
-  __pyx_t_56.low = 0x200FC80402010000;
-  __pyx_t_56.high = 0x0000000000000080;
+  __pyx_t_57.low = 0x200FC80402010000;
+  __pyx_t_57.high = 0x0000000000000080;
 
-  /* "tablut.pyx":79
+  /* "tablut.pyx":87
  *     Bitboard(low = 0x1017C40201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x200FC80402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x401FD00804020000, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3F80201008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x3F00402010080400, high = 0x0000000000000002),
  */
-  __pyx_t_57.low = 0x401FD00804020000;
-  __pyx_t_57.high = 0x0000000000000100;
+  __pyx_t_58.low = 0x401FD00804020000;
+  __pyx_t_58.high = 0x0000000000000100;
 
-  /* "tablut.pyx":80
+  /* "tablut.pyx":88
  *     Bitboard(low = 0x200FC80402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x401FD00804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x3F80201008040200, high = 0x0000000000000001),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3F00402010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x3E80804020100800, high = 0x0000000000000004),
  */
-  __pyx_t_58.low = 0x3F80201008040200;
-  __pyx_t_58.high = 0x0000000000000001;
+  __pyx_t_59.low = 0x3F80201008040200;
+  __pyx_t_59.high = 0x0000000000000001;
 
-  /* "tablut.pyx":81
+  /* "tablut.pyx":89
  *     Bitboard(low = 0x401FD00804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x3F80201008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x3F00402010080400, high = 0x0000000000000002),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3E80804020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x3D81008040201000, high = 0x0000000000000008),
  */
-  __pyx_t_59.low = 0x3F00402010080400;
-  __pyx_t_59.high = 0x0000000000000002;
+  __pyx_t_60.low = 0x3F00402010080400;
+  __pyx_t_60.high = 0x0000000000000002;
 
-  /* "tablut.pyx":82
+  /* "tablut.pyx":90
  *     Bitboard(low = 0x3F80201008040200, high = 0x0000000000000001),
  *     Bitboard(low = 0x3F00402010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x3E80804020100800, high = 0x0000000000000004),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3D81008040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x3B82010080402000, high = 0x0000000000000010),
  */
-  __pyx_t_60.low = 0x3E80804020100800;
-  __pyx_t_60.high = 0x0000000000000004;
+  __pyx_t_61.low = 0x3E80804020100800;
+  __pyx_t_61.high = 0x0000000000000004;
 
-  /* "tablut.pyx":83
+  /* "tablut.pyx":91
  *     Bitboard(low = 0x3F00402010080400, high = 0x0000000000000002),
  *     Bitboard(low = 0x3E80804020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x3D81008040201000, high = 0x0000000000000008),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3B82010080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x3784020100804000, high = 0x0000000000000020),
  */
-  __pyx_t_61.low = 0x3D81008040201000;
-  __pyx_t_61.high = 0x0000000000000008;
+  __pyx_t_62.low = 0x3D81008040201000;
+  __pyx_t_62.high = 0x0000000000000008;
 
-  /* "tablut.pyx":84
+  /* "tablut.pyx":92
  *     Bitboard(low = 0x3E80804020100800, high = 0x0000000000000004),
  *     Bitboard(low = 0x3D81008040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x3B82010080402000, high = 0x0000000000000010),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3784020100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x2F88040201008000, high = 0x0000000000000040),
  */
-  __pyx_t_62.low = 0x3B82010080402000;
-  __pyx_t_62.high = 0x0000000000000010;
+  __pyx_t_63.low = 0x3B82010080402000;
+  __pyx_t_63.high = 0x0000000000000010;
 
-  /* "tablut.pyx":85
+  /* "tablut.pyx":93
  *     Bitboard(low = 0x3D81008040201000, high = 0x0000000000000008),
  *     Bitboard(low = 0x3B82010080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x3784020100804000, high = 0x0000000000000020),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x2F88040201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x1F90080402010000, high = 0x0000000000000080),
  */
-  __pyx_t_63.low = 0x3784020100804000;
-  __pyx_t_63.high = 0x0000000000000020;
+  __pyx_t_64.low = 0x3784020100804000;
+  __pyx_t_64.high = 0x0000000000000020;
 
-  /* "tablut.pyx":86
+  /* "tablut.pyx":94
  *     Bitboard(low = 0x3B82010080402000, high = 0x0000000000000010),
  *     Bitboard(low = 0x3784020100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x2F88040201008000, high = 0x0000000000000040),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1F90080402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x3FA0100804020000, high = 0x0000000000000100),
  */
-  __pyx_t_64.low = 0x2F88040201008000;
-  __pyx_t_64.high = 0x0000000000000040;
+  __pyx_t_65.low = 0x2F88040201008000;
+  __pyx_t_65.high = 0x0000000000000040;
 
-  /* "tablut.pyx":87
+  /* "tablut.pyx":95
  *     Bitboard(low = 0x3784020100804000, high = 0x0000000000000020),
  *     Bitboard(low = 0x2F88040201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x1F90080402010000, high = 0x0000000000000080),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x3FA0100804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x0040201008040200, high = 0x00000000000000FE),
  */
-  __pyx_t_65.low = 0x1F90080402010000;
-  __pyx_t_65.high = 0x0000000000000080;
+  __pyx_t_66.low = 0x1F90080402010000;
+  __pyx_t_66.high = 0x0000000000000080;
 
-  /* "tablut.pyx":88
+  /* "tablut.pyx":96
  *     Bitboard(low = 0x2F88040201008000, high = 0x0000000000000040),
  *     Bitboard(low = 0x1F90080402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x3FA0100804020000, high = 0x0000000000000100),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0040201008040200, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0080402010080400, high = 0x00000000000000FC),
  */
-  __pyx_t_66.low = 0x3FA0100804020000;
-  __pyx_t_66.high = 0x0000000000000100;
+  __pyx_t_67.low = 0x3FA0100804020000;
+  __pyx_t_67.high = 0x0000000000000100;
 
-  /* "tablut.pyx":89
+  /* "tablut.pyx":97
  *     Bitboard(low = 0x1F90080402010000, high = 0x0000000000000080),
  *     Bitboard(low = 0x3FA0100804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x0040201008040200, high = 0x00000000000000FE),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0080402010080400, high = 0x00000000000000FC),
  *     Bitboard(low = 0x0100804020100800, high = 0x00000000000000FA),
  */
-  __pyx_t_67.low = 0x0040201008040200;
-  __pyx_t_67.high = 0x00000000000000FE;
+  __pyx_t_68.low = 0x0040201008040200;
+  __pyx_t_68.high = 0x00000000000000FE;
 
-  /* "tablut.pyx":90
+  /* "tablut.pyx":98
  *     Bitboard(low = 0x3FA0100804020000, high = 0x0000000000000100),
  *     Bitboard(low = 0x0040201008040200, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0080402010080400, high = 0x00000000000000FC),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0100804020100800, high = 0x00000000000000FA),
  *     Bitboard(low = 0x0201008040201000, high = 0x00000000000000F6),
  */
-  __pyx_t_68.low = 0x0080402010080400;
-  __pyx_t_68.high = 0x00000000000000FC;
+  __pyx_t_69.low = 0x0080402010080400;
+  __pyx_t_69.high = 0x00000000000000FC;
 
-  /* "tablut.pyx":91
+  /* "tablut.pyx":99
  *     Bitboard(low = 0x0040201008040200, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0080402010080400, high = 0x00000000000000FC),
  *     Bitboard(low = 0x0100804020100800, high = 0x00000000000000FA),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0201008040201000, high = 0x00000000000000F6),
  *     Bitboard(low = 0x0402010080402000, high = 0x00000000000000EE),
  */
-  __pyx_t_69.low = 0x0100804020100800;
-  __pyx_t_69.high = 0x00000000000000FA;
+  __pyx_t_70.low = 0x0100804020100800;
+  __pyx_t_70.high = 0x00000000000000FA;
 
-  /* "tablut.pyx":92
+  /* "tablut.pyx":100
  *     Bitboard(low = 0x0080402010080400, high = 0x00000000000000FC),
  *     Bitboard(low = 0x0100804020100800, high = 0x00000000000000FA),
  *     Bitboard(low = 0x0201008040201000, high = 0x00000000000000F6),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0402010080402000, high = 0x00000000000000EE),
  *     Bitboard(low = 0x0804020100804000, high = 0x00000000000000DE),
  */
-  __pyx_t_70.low = 0x0201008040201000;
-  __pyx_t_70.high = 0x00000000000000F6;
+  __pyx_t_71.low = 0x0201008040201000;
+  __pyx_t_71.high = 0x00000000000000F6;
 
-  /* "tablut.pyx":93
+  /* "tablut.pyx":101
  *     Bitboard(low = 0x0100804020100800, high = 0x00000000000000FA),
  *     Bitboard(low = 0x0201008040201000, high = 0x00000000000000F6),
  *     Bitboard(low = 0x0402010080402000, high = 0x00000000000000EE),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0804020100804000, high = 0x00000000000000DE),
  *     Bitboard(low = 0x1008040201008000, high = 0x00000000000000BE),
  */
-  __pyx_t_71.low = 0x0402010080402000;
-  __pyx_t_71.high = 0x00000000000000EE;
+  __pyx_t_72.low = 0x0402010080402000;
+  __pyx_t_72.high = 0x00000000000000EE;
 
-  /* "tablut.pyx":94
+  /* "tablut.pyx":102
  *     Bitboard(low = 0x0201008040201000, high = 0x00000000000000F6),
  *     Bitboard(low = 0x0402010080402000, high = 0x00000000000000EE),
  *     Bitboard(low = 0x0804020100804000, high = 0x00000000000000DE),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1008040201008000, high = 0x00000000000000BE),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000007E),
  */
-  __pyx_t_72.low = 0x0804020100804000;
-  __pyx_t_72.high = 0x00000000000000DE;
+  __pyx_t_73.low = 0x0804020100804000;
+  __pyx_t_73.high = 0x00000000000000DE;
 
-  /* "tablut.pyx":95
+  /* "tablut.pyx":103
  *     Bitboard(low = 0x0402010080402000, high = 0x00000000000000EE),
  *     Bitboard(low = 0x0804020100804000, high = 0x00000000000000DE),
  *     Bitboard(low = 0x1008040201008000, high = 0x00000000000000BE),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000007E),
  *     Bitboard(low = 0x4020100804020000, high = 0x00000000000000FE),
  */
-  __pyx_t_73.low = 0x1008040201008000;
-  __pyx_t_73.high = 0x00000000000000BE;
+  __pyx_t_74.low = 0x1008040201008000;
+  __pyx_t_74.high = 0x00000000000000BE;
 
-  /* "tablut.pyx":96
+  /* "tablut.pyx":104
  *     Bitboard(low = 0x0804020100804000, high = 0x00000000000000DE),
  *     Bitboard(low = 0x1008040201008000, high = 0x00000000000000BE),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000007E),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x4020100804020000, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0040201008040200, high = 0x000000000001FC01),
  */
-  __pyx_t_74.low = 0x2010080402010000;
-  __pyx_t_74.high = 0x000000000000007E;
+  __pyx_t_75.low = 0x2010080402010000;
+  __pyx_t_75.high = 0x000000000000007E;
 
-  /* "tablut.pyx":97
+  /* "tablut.pyx":105
  *     Bitboard(low = 0x1008040201008000, high = 0x00000000000000BE),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000007E),
  *     Bitboard(low = 0x4020100804020000, high = 0x00000000000000FE),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0040201008040200, high = 0x000000000001FC01),
  *     Bitboard(low = 0x0080402010080400, high = 0x000000000001F802),
  */
-  __pyx_t_75.low = 0x4020100804020000;
-  __pyx_t_75.high = 0x00000000000000FE;
+  __pyx_t_76.low = 0x4020100804020000;
+  __pyx_t_76.high = 0x00000000000000FE;
 
-  /* "tablut.pyx":98
+  /* "tablut.pyx":106
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000007E),
  *     Bitboard(low = 0x4020100804020000, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0040201008040200, high = 0x000000000001FC01),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0080402010080400, high = 0x000000000001F802),
  *     Bitboard(low = 0x0100804020100800, high = 0x000000000001F404),
  */
-  __pyx_t_76.low = 0x0040201008040200;
-  __pyx_t_76.high = 0x000000000001FC01;
+  __pyx_t_77.low = 0x0040201008040200;
+  __pyx_t_77.high = 0x000000000001FC01;
 
-  /* "tablut.pyx":99
+  /* "tablut.pyx":107
  *     Bitboard(low = 0x4020100804020000, high = 0x00000000000000FE),
  *     Bitboard(low = 0x0040201008040200, high = 0x000000000001FC01),
  *     Bitboard(low = 0x0080402010080400, high = 0x000000000001F802),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0100804020100800, high = 0x000000000001F404),
  *     Bitboard(low = 0x0201008040201000, high = 0x000000000001EC08),
  */
-  __pyx_t_77.low = 0x0080402010080400;
-  __pyx_t_77.high = 0x000000000001F802;
+  __pyx_t_78.low = 0x0080402010080400;
+  __pyx_t_78.high = 0x000000000001F802;
 
-  /* "tablut.pyx":100
+  /* "tablut.pyx":108
  *     Bitboard(low = 0x0040201008040200, high = 0x000000000001FC01),
  *     Bitboard(low = 0x0080402010080400, high = 0x000000000001F802),
  *     Bitboard(low = 0x0100804020100800, high = 0x000000000001F404),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0201008040201000, high = 0x000000000001EC08),
  *     Bitboard(low = 0x0402010080402000, high = 0x000000000001DC10),
  */
-  __pyx_t_78.low = 0x0100804020100800;
-  __pyx_t_78.high = 0x000000000001F404;
+  __pyx_t_79.low = 0x0100804020100800;
+  __pyx_t_79.high = 0x000000000001F404;
 
-  /* "tablut.pyx":101
+  /* "tablut.pyx":109
  *     Bitboard(low = 0x0080402010080400, high = 0x000000000001F802),
  *     Bitboard(low = 0x0100804020100800, high = 0x000000000001F404),
  *     Bitboard(low = 0x0201008040201000, high = 0x000000000001EC08),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0402010080402000, high = 0x000000000001DC10),
  *     Bitboard(low = 0x0804020100804000, high = 0x000000000001BC20),
  */
-  __pyx_t_79.low = 0x0201008040201000;
-  __pyx_t_79.high = 0x000000000001EC08;
+  __pyx_t_80.low = 0x0201008040201000;
+  __pyx_t_80.high = 0x000000000001EC08;
 
-  /* "tablut.pyx":102
+  /* "tablut.pyx":110
  *     Bitboard(low = 0x0100804020100800, high = 0x000000000001F404),
  *     Bitboard(low = 0x0201008040201000, high = 0x000000000001EC08),
  *     Bitboard(low = 0x0402010080402000, high = 0x000000000001DC10),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x0804020100804000, high = 0x000000000001BC20),
  *     Bitboard(low = 0x1008040201008000, high = 0x0000000000017C40),
  */
-  __pyx_t_80.low = 0x0402010080402000;
-  __pyx_t_80.high = 0x000000000001DC10;
+  __pyx_t_81.low = 0x0402010080402000;
+  __pyx_t_81.high = 0x000000000001DC10;
 
-  /* "tablut.pyx":103
+  /* "tablut.pyx":111
  *     Bitboard(low = 0x0201008040201000, high = 0x000000000001EC08),
  *     Bitboard(low = 0x0402010080402000, high = 0x000000000001DC10),
  *     Bitboard(low = 0x0804020100804000, high = 0x000000000001BC20),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x1008040201008000, high = 0x0000000000017C40),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000FC80),
  */
-  __pyx_t_81.low = 0x0804020100804000;
-  __pyx_t_81.high = 0x000000000001BC20;
+  __pyx_t_82.low = 0x0804020100804000;
+  __pyx_t_82.high = 0x000000000001BC20;
 
-  /* "tablut.pyx":104
+  /* "tablut.pyx":112
  *     Bitboard(low = 0x0402010080402000, high = 0x000000000001DC10),
  *     Bitboard(low = 0x0804020100804000, high = 0x000000000001BC20),
  *     Bitboard(low = 0x1008040201008000, high = 0x0000000000017C40),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000FC80),
  *     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]
  */
-  __pyx_t_82.low = 0x1008040201008000;
-  __pyx_t_82.high = 0x0000000000017C40;
+  __pyx_t_83.low = 0x1008040201008000;
+  __pyx_t_83.high = 0x0000000000017C40;
 
-  /* "tablut.pyx":105
+  /* "tablut.pyx":113
  *     Bitboard(low = 0x0804020100804000, high = 0x000000000001BC20),
  *     Bitboard(low = 0x1008040201008000, high = 0x0000000000017C40),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000FC80),             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]
  * 
  */
-  __pyx_t_83.low = 0x2010080402010000;
-  __pyx_t_83.high = 0x000000000000FC80;
+  __pyx_t_84.low = 0x2010080402010000;
+  __pyx_t_84.high = 0x000000000000FC80;
 
-  /* "tablut.pyx":106
+  /* "tablut.pyx":114
  *     Bitboard(low = 0x1008040201008000, high = 0x0000000000017C40),
  *     Bitboard(low = 0x2010080402010000, high = 0x000000000000FC80),
  *     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]             # <<<<<<<<<<<<<<
  * 
- * # Fast, inline access function
+ * cdef inline Bitboard get_blocker_mask(int index):
  */
-  __pyx_t_84.low = 0x4020100804020000;
-  __pyx_t_84.high = 0x000000000001FD00;
+  __pyx_t_85.low = 0x4020100804020000;
+  __pyx_t_85.high = 0x000000000001FD00;
 
-  /* "tablut.pyx":25
- *     uint64_t high
+  /* "tablut.pyx":33
+ * cdef Bitboard EMPTY_BITBOARD = Bitboard(ZERO, ZERO)
  * 
  * cdef Bitboard[81] BLOCKER_MASK = [             # <<<<<<<<<<<<<<
  *     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
  *     Bitboard(low = 0x00804020100804FC, high = 0x0000000000000002),
  */
-  __pyx_t_85[0] = __pyx_t_4;
-  __pyx_t_85[1] = __pyx_t_5;
-  __pyx_t_85[2] = __pyx_t_6;
-  __pyx_t_85[3] = __pyx_t_7;
-  __pyx_t_85[4] = __pyx_t_8;
-  __pyx_t_85[5] = __pyx_t_9;
-  __pyx_t_85[6] = __pyx_t_10;
-  __pyx_t_85[7] = __pyx_t_11;
-  __pyx_t_85[8] = __pyx_t_12;
-  __pyx_t_85[9] = __pyx_t_13;
-  __pyx_t_85[10] = __pyx_t_14;
-  __pyx_t_85[11] = __pyx_t_15;
-  __pyx_t_85[12] = __pyx_t_16;
-  __pyx_t_85[13] = __pyx_t_17;
-  __pyx_t_85[14] = __pyx_t_18;
-  __pyx_t_85[15] = __pyx_t_19;
-  __pyx_t_85[16] = __pyx_t_20;
-  __pyx_t_85[17] = __pyx_t_21;
-  __pyx_t_85[18] = __pyx_t_22;
-  __pyx_t_85[19] = __pyx_t_23;
-  __pyx_t_85[20] = __pyx_t_24;
-  __pyx_t_85[21] = __pyx_t_25;
-  __pyx_t_85[22] = __pyx_t_26;
-  __pyx_t_85[23] = __pyx_t_27;
-  __pyx_t_85[24] = __pyx_t_28;
-  __pyx_t_85[25] = __pyx_t_29;
-  __pyx_t_85[26] = __pyx_t_30;
-  __pyx_t_85[27] = __pyx_t_31;
-  __pyx_t_85[28] = __pyx_t_32;
-  __pyx_t_85[29] = __pyx_t_33;
-  __pyx_t_85[30] = __pyx_t_34;
-  __pyx_t_85[31] = __pyx_t_35;
-  __pyx_t_85[32] = __pyx_t_36;
-  __pyx_t_85[33] = __pyx_t_37;
-  __pyx_t_85[34] = __pyx_t_38;
-  __pyx_t_85[35] = __pyx_t_39;
-  __pyx_t_85[36] = __pyx_t_40;
-  __pyx_t_85[37] = __pyx_t_41;
-  __pyx_t_85[38] = __pyx_t_42;
-  __pyx_t_85[39] = __pyx_t_43;
-  __pyx_t_85[40] = __pyx_t_44;
-  __pyx_t_85[41] = __pyx_t_45;
-  __pyx_t_85[42] = __pyx_t_46;
-  __pyx_t_85[43] = __pyx_t_47;
-  __pyx_t_85[44] = __pyx_t_48;
-  __pyx_t_85[45] = __pyx_t_49;
-  __pyx_t_85[46] = __pyx_t_50;
-  __pyx_t_85[47] = __pyx_t_51;
-  __pyx_t_85[48] = __pyx_t_52;
-  __pyx_t_85[49] = __pyx_t_53;
-  __pyx_t_85[50] = __pyx_t_54;
-  __pyx_t_85[51] = __pyx_t_55;
-  __pyx_t_85[52] = __pyx_t_56;
-  __pyx_t_85[53] = __pyx_t_57;
-  __pyx_t_85[54] = __pyx_t_58;
-  __pyx_t_85[55] = __pyx_t_59;
-  __pyx_t_85[56] = __pyx_t_60;
-  __pyx_t_85[57] = __pyx_t_61;
-  __pyx_t_85[58] = __pyx_t_62;
-  __pyx_t_85[59] = __pyx_t_63;
-  __pyx_t_85[60] = __pyx_t_64;
-  __pyx_t_85[61] = __pyx_t_65;
-  __pyx_t_85[62] = __pyx_t_66;
-  __pyx_t_85[63] = __pyx_t_67;
-  __pyx_t_85[64] = __pyx_t_68;
-  __pyx_t_85[65] = __pyx_t_69;
-  __pyx_t_85[66] = __pyx_t_70;
-  __pyx_t_85[67] = __pyx_t_71;
-  __pyx_t_85[68] = __pyx_t_72;
-  __pyx_t_85[69] = __pyx_t_73;
-  __pyx_t_85[70] = __pyx_t_74;
-  __pyx_t_85[71] = __pyx_t_75;
-  __pyx_t_85[72] = __pyx_t_76;
-  __pyx_t_85[73] = __pyx_t_77;
-  __pyx_t_85[74] = __pyx_t_78;
-  __pyx_t_85[75] = __pyx_t_79;
-  __pyx_t_85[76] = __pyx_t_80;
-  __pyx_t_85[77] = __pyx_t_81;
-  __pyx_t_85[78] = __pyx_t_82;
-  __pyx_t_85[79] = __pyx_t_83;
-  __pyx_t_85[80] = __pyx_t_84;
-  memcpy(&(__pyx_v_6tablut_BLOCKER_MASK[0]), __pyx_t_85, sizeof(__pyx_v_6tablut_BLOCKER_MASK[0]) * (81));
+  __pyx_t_86[0] = __pyx_t_4;
+  __pyx_t_86[1] = __pyx_t_6;
+  __pyx_t_86[2] = __pyx_t_7;
+  __pyx_t_86[3] = __pyx_t_8;
+  __pyx_t_86[4] = __pyx_t_9;
+  __pyx_t_86[5] = __pyx_t_10;
+  __pyx_t_86[6] = __pyx_t_11;
+  __pyx_t_86[7] = __pyx_t_12;
+  __pyx_t_86[8] = __pyx_t_13;
+  __pyx_t_86[9] = __pyx_t_14;
+  __pyx_t_86[10] = __pyx_t_15;
+  __pyx_t_86[11] = __pyx_t_16;
+  __pyx_t_86[12] = __pyx_t_17;
+  __pyx_t_86[13] = __pyx_t_18;
+  __pyx_t_86[14] = __pyx_t_19;
+  __pyx_t_86[15] = __pyx_t_20;
+  __pyx_t_86[16] = __pyx_t_21;
+  __pyx_t_86[17] = __pyx_t_22;
+  __pyx_t_86[18] = __pyx_t_23;
+  __pyx_t_86[19] = __pyx_t_24;
+  __pyx_t_86[20] = __pyx_t_25;
+  __pyx_t_86[21] = __pyx_t_26;
+  __pyx_t_86[22] = __pyx_t_27;
+  __pyx_t_86[23] = __pyx_t_28;
+  __pyx_t_86[24] = __pyx_t_29;
+  __pyx_t_86[25] = __pyx_t_30;
+  __pyx_t_86[26] = __pyx_t_31;
+  __pyx_t_86[27] = __pyx_t_32;
+  __pyx_t_86[28] = __pyx_t_33;
+  __pyx_t_86[29] = __pyx_t_34;
+  __pyx_t_86[30] = __pyx_t_35;
+  __pyx_t_86[31] = __pyx_t_36;
+  __pyx_t_86[32] = __pyx_t_37;
+  __pyx_t_86[33] = __pyx_t_38;
+  __pyx_t_86[34] = __pyx_t_39;
+  __pyx_t_86[35] = __pyx_t_40;
+  __pyx_t_86[36] = __pyx_t_41;
+  __pyx_t_86[37] = __pyx_t_42;
+  __pyx_t_86[38] = __pyx_t_43;
+  __pyx_t_86[39] = __pyx_t_44;
+  __pyx_t_86[40] = __pyx_t_45;
+  __pyx_t_86[41] = __pyx_t_46;
+  __pyx_t_86[42] = __pyx_t_47;
+  __pyx_t_86[43] = __pyx_t_48;
+  __pyx_t_86[44] = __pyx_t_49;
+  __pyx_t_86[45] = __pyx_t_50;
+  __pyx_t_86[46] = __pyx_t_51;
+  __pyx_t_86[47] = __pyx_t_52;
+  __pyx_t_86[48] = __pyx_t_53;
+  __pyx_t_86[49] = __pyx_t_54;
+  __pyx_t_86[50] = __pyx_t_55;
+  __pyx_t_86[51] = __pyx_t_56;
+  __pyx_t_86[52] = __pyx_t_57;
+  __pyx_t_86[53] = __pyx_t_58;
+  __pyx_t_86[54] = __pyx_t_59;
+  __pyx_t_86[55] = __pyx_t_60;
+  __pyx_t_86[56] = __pyx_t_61;
+  __pyx_t_86[57] = __pyx_t_62;
+  __pyx_t_86[58] = __pyx_t_63;
+  __pyx_t_86[59] = __pyx_t_64;
+  __pyx_t_86[60] = __pyx_t_65;
+  __pyx_t_86[61] = __pyx_t_66;
+  __pyx_t_86[62] = __pyx_t_67;
+  __pyx_t_86[63] = __pyx_t_68;
+  __pyx_t_86[64] = __pyx_t_69;
+  __pyx_t_86[65] = __pyx_t_70;
+  __pyx_t_86[66] = __pyx_t_71;
+  __pyx_t_86[67] = __pyx_t_72;
+  __pyx_t_86[68] = __pyx_t_73;
+  __pyx_t_86[69] = __pyx_t_74;
+  __pyx_t_86[70] = __pyx_t_75;
+  __pyx_t_86[71] = __pyx_t_76;
+  __pyx_t_86[72] = __pyx_t_77;
+  __pyx_t_86[73] = __pyx_t_78;
+  __pyx_t_86[74] = __pyx_t_79;
+  __pyx_t_86[75] = __pyx_t_80;
+  __pyx_t_86[76] = __pyx_t_81;
+  __pyx_t_86[77] = __pyx_t_82;
+  __pyx_t_86[78] = __pyx_t_83;
+  __pyx_t_86[79] = __pyx_t_84;
+  __pyx_t_86[80] = __pyx_t_85;
+  memcpy(&(__pyx_v_6tablut_BLOCKER_MASK[0]), __pyx_t_86, sizeof(__pyx_v_6tablut_BLOCKER_MASK[0]) * (81));
 
-  /* "tablut.pyx":112
+  /* "tablut.pyx":122
  *     return Bitboard(BLOCKER_MASK[index].low, BLOCKER_MASK[index].high)
  * 
  * cdef int[81] BLOCKER_BITS = [             # <<<<<<<<<<<<<<
  *     14, 13, 13, 13, 13, 13, 13, 13, 14,
  *     13, 12, 12, 12, 12, 12, 12, 12, 13,
  */
-  __pyx_t_86[0] = 14;
-  __pyx_t_86[1] = 13;
-  __pyx_t_86[2] = 13;
-  __pyx_t_86[3] = 13;
-  __pyx_t_86[4] = 13;
-  __pyx_t_86[5] = 13;
-  __pyx_t_86[6] = 13;
-  __pyx_t_86[7] = 13;
-  __pyx_t_86[8] = 14;
-  __pyx_t_86[9] = 13;
-  __pyx_t_86[10] = 12;
-  __pyx_t_86[11] = 12;
-  __pyx_t_86[12] = 12;
-  __pyx_t_86[13] = 12;
-  __pyx_t_86[14] = 12;
-  __pyx_t_86[15] = 12;
-  __pyx_t_86[16] = 12;
-  __pyx_t_86[17] = 13;
-  __pyx_t_86[18] = 13;
-  __pyx_t_86[19] = 12;
-  __pyx_t_86[20] = 12;
-  __pyx_t_86[21] = 12;
-  __pyx_t_86[22] = 12;
-  __pyx_t_86[23] = 12;
-  __pyx_t_86[24] = 12;
-  __pyx_t_86[25] = 12;
-  __pyx_t_86[26] = 13;
-  __pyx_t_86[27] = 13;
-  __pyx_t_86[28] = 12;
-  __pyx_t_86[29] = 12;
-  __pyx_t_86[30] = 12;
-  __pyx_t_86[31] = 12;
-  __pyx_t_86[32] = 12;
-  __pyx_t_86[33] = 12;
-  __pyx_t_86[34] = 12;
-  __pyx_t_86[35] = 13;
-  __pyx_t_86[36] = 13;
-  __pyx_t_86[37] = 12;
-  __pyx_t_86[38] = 12;
-  __pyx_t_86[39] = 12;
-  __pyx_t_86[40] = 12;
-  __pyx_t_86[41] = 12;
-  __pyx_t_86[42] = 12;
-  __pyx_t_86[43] = 12;
-  __pyx_t_86[44] = 13;
-  __pyx_t_86[45] = 13;
-  __pyx_t_86[46] = 12;
-  __pyx_t_86[47] = 12;
-  __pyx_t_86[48] = 12;
-  __pyx_t_86[49] = 12;
-  __pyx_t_86[50] = 12;
-  __pyx_t_86[51] = 12;
-  __pyx_t_86[52] = 12;
-  __pyx_t_86[53] = 13;
-  __pyx_t_86[54] = 13;
-  __pyx_t_86[55] = 12;
-  __pyx_t_86[56] = 12;
-  __pyx_t_86[57] = 12;
-  __pyx_t_86[58] = 12;
-  __pyx_t_86[59] = 12;
-  __pyx_t_86[60] = 12;
-  __pyx_t_86[61] = 12;
-  __pyx_t_86[62] = 13;
-  __pyx_t_86[63] = 13;
-  __pyx_t_86[64] = 12;
-  __pyx_t_86[65] = 12;
-  __pyx_t_86[66] = 12;
-  __pyx_t_86[67] = 12;
-  __pyx_t_86[68] = 12;
-  __pyx_t_86[69] = 12;
-  __pyx_t_86[70] = 12;
-  __pyx_t_86[71] = 13;
-  __pyx_t_86[72] = 14;
-  __pyx_t_86[73] = 13;
-  __pyx_t_86[74] = 13;
-  __pyx_t_86[75] = 13;
-  __pyx_t_86[76] = 13;
-  __pyx_t_86[77] = 13;
-  __pyx_t_86[78] = 13;
-  __pyx_t_86[79] = 13;
-  __pyx_t_86[80] = 14;
-  memcpy(&(__pyx_v_6tablut_BLOCKER_BITS[0]), __pyx_t_86, sizeof(__pyx_v_6tablut_BLOCKER_BITS[0]) * (81));
+  __pyx_t_87[0] = 14;
+  __pyx_t_87[1] = 13;
+  __pyx_t_87[2] = 13;
+  __pyx_t_87[3] = 13;
+  __pyx_t_87[4] = 13;
+  __pyx_t_87[5] = 13;
+  __pyx_t_87[6] = 13;
+  __pyx_t_87[7] = 13;
+  __pyx_t_87[8] = 14;
+  __pyx_t_87[9] = 13;
+  __pyx_t_87[10] = 12;
+  __pyx_t_87[11] = 12;
+  __pyx_t_87[12] = 12;
+  __pyx_t_87[13] = 12;
+  __pyx_t_87[14] = 12;
+  __pyx_t_87[15] = 12;
+  __pyx_t_87[16] = 12;
+  __pyx_t_87[17] = 13;
+  __pyx_t_87[18] = 13;
+  __pyx_t_87[19] = 12;
+  __pyx_t_87[20] = 12;
+  __pyx_t_87[21] = 12;
+  __pyx_t_87[22] = 12;
+  __pyx_t_87[23] = 12;
+  __pyx_t_87[24] = 12;
+  __pyx_t_87[25] = 12;
+  __pyx_t_87[26] = 13;
+  __pyx_t_87[27] = 13;
+  __pyx_t_87[28] = 12;
+  __pyx_t_87[29] = 12;
+  __pyx_t_87[30] = 12;
+  __pyx_t_87[31] = 12;
+  __pyx_t_87[32] = 12;
+  __pyx_t_87[33] = 12;
+  __pyx_t_87[34] = 12;
+  __pyx_t_87[35] = 13;
+  __pyx_t_87[36] = 13;
+  __pyx_t_87[37] = 12;
+  __pyx_t_87[38] = 12;
+  __pyx_t_87[39] = 12;
+  __pyx_t_87[40] = 12;
+  __pyx_t_87[41] = 12;
+  __pyx_t_87[42] = 12;
+  __pyx_t_87[43] = 12;
+  __pyx_t_87[44] = 13;
+  __pyx_t_87[45] = 13;
+  __pyx_t_87[46] = 12;
+  __pyx_t_87[47] = 12;
+  __pyx_t_87[48] = 12;
+  __pyx_t_87[49] = 12;
+  __pyx_t_87[50] = 12;
+  __pyx_t_87[51] = 12;
+  __pyx_t_87[52] = 12;
+  __pyx_t_87[53] = 13;
+  __pyx_t_87[54] = 13;
+  __pyx_t_87[55] = 12;
+  __pyx_t_87[56] = 12;
+  __pyx_t_87[57] = 12;
+  __pyx_t_87[58] = 12;
+  __pyx_t_87[59] = 12;
+  __pyx_t_87[60] = 12;
+  __pyx_t_87[61] = 12;
+  __pyx_t_87[62] = 13;
+  __pyx_t_87[63] = 13;
+  __pyx_t_87[64] = 12;
+  __pyx_t_87[65] = 12;
+  __pyx_t_87[66] = 12;
+  __pyx_t_87[67] = 12;
+  __pyx_t_87[68] = 12;
+  __pyx_t_87[69] = 12;
+  __pyx_t_87[70] = 12;
+  __pyx_t_87[71] = 13;
+  __pyx_t_87[72] = 14;
+  __pyx_t_87[73] = 13;
+  __pyx_t_87[74] = 13;
+  __pyx_t_87[75] = 13;
+  __pyx_t_87[76] = 13;
+  __pyx_t_87[77] = 13;
+  __pyx_t_87[78] = 13;
+  __pyx_t_87[79] = 13;
+  __pyx_t_87[80] = 14;
+  memcpy(&(__pyx_v_6tablut_BLOCKER_BITS[0]), __pyx_t_87, sizeof(__pyx_v_6tablut_BLOCKER_BITS[0]) * (81));
 
-  /* "tablut.pyx":179
- *     return bitboard
+  /* "tablut.pyx":201
+ *     return board_1.low == board_2.low and board_1.high == board_2.high
  * 
  * def create_start_position():             # <<<<<<<<<<<<<<
  *     return create_board()
  * 
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_1create_start_position, 0, __pyx_n_s_create_start_position, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__15)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 179, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_create_start_position, __pyx_t_3) < 0) __PYX_ERR(0, 179, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_1create_start_position, 0, __pyx_n_s_create_start_position, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__27)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 201, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_create_start_position, __pyx_t_2) < 0) __PYX_ERR(0, 201, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":182
+  /* "tablut.pyx":204
  *     return create_board()
  * 
  * def print_board(Bitboard board):             # <<<<<<<<<<<<<<
  *     cdef int rank, file, sq
  *     for rank in range(8, -1, -1):
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_3print_board, 0, __pyx_n_s_print_board, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__17)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 182, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_board, __pyx_t_3) < 0) __PYX_ERR(0, 182, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_3print_board, 0, __pyx_n_s_print_board, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__29)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 204, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_board, __pyx_t_2) < 0) __PYX_ERR(0, 204, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":385
+  /* "tablut.pyx":495
+ *         free_blocker_move_tables(&tables)
+ * 
+ * def find_magics(squares=None):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-accessible function to print magic numbers for specified board squares.
+ */
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_5find_magics, 0, __pyx_n_s_find_magics, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__31)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 495, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_2, __pyx_tuple__32);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_find_magics, __pyx_t_2) < 0) __PYX_ERR(0, 495, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "tablut.pyx":539
  * #==============================================================================
  * 
  * def print_blocker_masks():             # <<<<<<<<<<<<<<
- *     print_masks()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_MASK values
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_5print_blocker_masks, 0, __pyx_n_s_print_blocker_masks, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__18)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 385, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_blocker_masks, __pyx_t_3) < 0) __PYX_ERR(0, 385, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_7print_blocker_masks, 0, __pyx_n_s_print_blocker_masks, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__33)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 539, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_blocker_masks, __pyx_t_2) < 0) __PYX_ERR(0, 539, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":388
+  /* "tablut.pyx":545
  *     print_masks()
  * 
  * def print_blocker_bits():             # <<<<<<<<<<<<<<
- *     print_relevant_bits()
- * 
+ *     """
+ *     Python-friendly function to print BLOCKER_BITS values
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_7print_blocker_bits, 0, __pyx_n_s_print_blocker_bits, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__19)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 388, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_blocker_bits, __pyx_t_3) < 0) __PYX_ERR(0, 388, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_9print_blocker_bits, 0, __pyx_n_s_print_blocker_bits, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__34)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 545, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_print_blocker_bits, __pyx_t_2) < 0) __PYX_ERR(0, 545, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":391
+  /* "tablut.pyx":551
  *     print_relevant_bits()
  * 
  * def test():             # <<<<<<<<<<<<<<
  *     cdef uint64_t r = random_u64()
  *     cdef Bitboard board = Bitboard(r, 0)
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_9test, 0, __pyx_n_s_test, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__21)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 391, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_test, __pyx_t_3) < 0) __PYX_ERR(0, 391, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_11test, 0, __pyx_n_s_test, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__36)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 551, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_test, __pyx_t_2) < 0) __PYX_ERR(0, 551, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "tablut.pyx":444
- *     tables.size = 0
+  /* "tablut.pyx":558
+ * #---------------------------------------------
  * 
- * def build_tables(int square):             # <<<<<<<<<<<<<<
- *     cdef Bitboard tmp = Bitboard(0,0)
- *     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+ * def py_build_bm_tables(int square):             # <<<<<<<<<<<<<<
+ *     """
+ *     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_11build_tables, 0, __pyx_n_s_build_tables, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__23)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 444, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_build_tables, __pyx_t_3) < 0) __PYX_ERR(0, 444, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6tablut_13py_build_bm_tables, 0, __pyx_n_s_py_build_bm_tables, NULL, __pyx_n_s_tablut, __pyx_d, ((PyObject *)__pyx_codeobj__38)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 558, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_py_build_bm_tables, __pyx_t_2) < 0) __PYX_ERR(0, 558, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "tablut.pyx":1
  * # cython: language_level=3             # <<<<<<<<<<<<<<
- * 
+ * #TODO: use all the constants I've defined
  * #------------------------------------------------------------------------------
  */
-  __pyx_t_3 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_test_2, __pyx_t_3) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_2 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_test_2, __pyx_t_2) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /*--- Wrapped vars code ---*/
 
@@ -9950,6 +13012,132 @@ static CYTHON_INLINE PyObject* __Pyx_PyUnicode_From_int(int value, Py_ssize_t wi
     return __Pyx_PyUnicode_BuildFromAscii(ulength, dpos, (int) length, prepend_sign, padding_char);
 }
 
+/* PyIntBinop */
+#if !CYTHON_COMPILING_IN_PYPY
+static PyObject* __Pyx_PyInt_LshiftObjC(PyObject *op1, PyObject *op2, long intval, int inplace, int zerodivision_check) {
+    CYTHON_MAYBE_UNUSED_VAR(intval);
+    CYTHON_MAYBE_UNUSED_VAR(inplace);
+    CYTHON_UNUSED_VAR(zerodivision_check);
+    #if PY_MAJOR_VERSION < 3
+    if (likely(PyInt_CheckExact(op1))) {
+        const long b = intval;
+        long a = PyInt_AS_LONG(op1);
+        
+            if (likely(b < (long) (sizeof(long)*8) && a == (a << b) >> b) || !a) {
+                return PyInt_FromLong(a << b);
+            }
+    }
+    #endif
+    #if CYTHON_USE_PYLONG_INTERNALS
+    if (likely(PyLong_CheckExact(op1))) {
+        const long b = intval;
+        long a, x;
+#ifdef HAVE_LONG_LONG
+        const PY_LONG_LONG llb = intval;
+        PY_LONG_LONG lla, llx;
+#endif
+        if (unlikely(__Pyx_PyLong_IsZero(op1))) {
+            return __Pyx_NewRef(op1);
+        }
+        if (likely(__Pyx_PyLong_IsCompact(op1))) {
+            a = __Pyx_PyLong_CompactValue(op1);
+        } else {
+            const digit* digits = __Pyx_PyLong_Digits(op1);
+            const Py_ssize_t size = __Pyx_PyLong_SignedDigitCount(op1);
+            switch (size) {
+                case -2:
+                    if (8 * sizeof(long) - 1 > 2 * PyLong_SHIFT) {
+                        a = -(long) (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 2 * PyLong_SHIFT) {
+                        lla = -(PY_LONG_LONG) (((((unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                case 2:
+                    if (8 * sizeof(long) - 1 > 2 * PyLong_SHIFT) {
+                        a = (long) (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 2 * PyLong_SHIFT) {
+                        lla = (PY_LONG_LONG) (((((unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                case -3:
+                    if (8 * sizeof(long) - 1 > 3 * PyLong_SHIFT) {
+                        a = -(long) (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 3 * PyLong_SHIFT) {
+                        lla = -(PY_LONG_LONG) (((((((unsigned PY_LONG_LONG)digits[2]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                case 3:
+                    if (8 * sizeof(long) - 1 > 3 * PyLong_SHIFT) {
+                        a = (long) (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 3 * PyLong_SHIFT) {
+                        lla = (PY_LONG_LONG) (((((((unsigned PY_LONG_LONG)digits[2]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                case -4:
+                    if (8 * sizeof(long) - 1 > 4 * PyLong_SHIFT) {
+                        a = -(long) (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 4 * PyLong_SHIFT) {
+                        lla = -(PY_LONG_LONG) (((((((((unsigned PY_LONG_LONG)digits[3]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[2]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                case 4:
+                    if (8 * sizeof(long) - 1 > 4 * PyLong_SHIFT) {
+                        a = (long) (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0]));
+                        break;
+                    #ifdef HAVE_LONG_LONG
+                    } else if (8 * sizeof(PY_LONG_LONG) - 1 > 4 * PyLong_SHIFT) {
+                        lla = (PY_LONG_LONG) (((((((((unsigned PY_LONG_LONG)digits[3]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[2]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[1]) << PyLong_SHIFT) | (unsigned PY_LONG_LONG)digits[0]));
+                        goto long_long;
+                    #endif
+                    }
+                    CYTHON_FALLTHROUGH;
+                default: return PyLong_Type.tp_as_number->nb_lshift(op1, op2);
+            }
+        }
+                x = a << b;
+#ifdef HAVE_LONG_LONG
+                if (unlikely(!(b < (long) (sizeof(long)*8) && a == x >> b)) && a) {
+                    lla = a;
+                    goto long_long;
+                }
+#else
+                if (likely(b < (long) (sizeof(long)*8) && a == x >> b) || !a)
+#endif
+            return PyLong_FromLong(x);
+#ifdef HAVE_LONG_LONG
+        long_long:
+                llx = lla << llb;
+                if (likely(lla == llx >> llb))
+            return PyLong_FromLongLong(llx);
+#endif
+        
+        
+    }
+    #endif
+    return (inplace ? PyNumber_InPlaceLshift : PyNumber_Lshift)(op1, op2);
+}
+#endif
+
 /* PyDictVersioning */
 #if CYTHON_USE_DICT_VERSIONS && CYTHON_USE_TYPE_SLOTS
 static CYTHON_INLINE PY_UINT64_T __Pyx_get_tp_dict_version(PyObject *obj) {
@@ -10017,6 +13205,155 @@ static CYTHON_INLINE PyObject *__Pyx__GetModuleGlobalName(PyObject *name)
     PyErr_Clear();
 #endif
     return __Pyx_GetBuiltinName(name);
+}
+
+/* SwapException */
+#if CYTHON_FAST_THREAD_STATE
+static CYTHON_INLINE void __Pyx__ExceptionSwap(PyThreadState *tstate, PyObject **type, PyObject **value, PyObject **tb) {
+    PyObject *tmp_type, *tmp_value, *tmp_tb;
+  #if CYTHON_USE_EXC_INFO_STACK && PY_VERSION_HEX >= 0x030B00a4
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    tmp_value = exc_info->exc_value;
+    exc_info->exc_value = *value;
+    if (tmp_value == NULL || tmp_value == Py_None) {
+        Py_XDECREF(tmp_value);
+        tmp_value = NULL;
+        tmp_type = NULL;
+        tmp_tb = NULL;
+    } else {
+        tmp_type = (PyObject*) Py_TYPE(tmp_value);
+        Py_INCREF(tmp_type);
+        #if CYTHON_COMPILING_IN_CPYTHON
+        tmp_tb = ((PyBaseExceptionObject*) tmp_value)->traceback;
+        Py_XINCREF(tmp_tb);
+        #else
+        tmp_tb = PyException_GetTraceback(tmp_value);
+        #endif
+    }
+  #elif CYTHON_USE_EXC_INFO_STACK
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    tmp_type = exc_info->exc_type;
+    tmp_value = exc_info->exc_value;
+    tmp_tb = exc_info->exc_traceback;
+    exc_info->exc_type = *type;
+    exc_info->exc_value = *value;
+    exc_info->exc_traceback = *tb;
+  #else
+    tmp_type = tstate->exc_type;
+    tmp_value = tstate->exc_value;
+    tmp_tb = tstate->exc_traceback;
+    tstate->exc_type = *type;
+    tstate->exc_value = *value;
+    tstate->exc_traceback = *tb;
+  #endif
+    *type = tmp_type;
+    *value = tmp_value;
+    *tb = tmp_tb;
+}
+#else
+static CYTHON_INLINE void __Pyx_ExceptionSwap(PyObject **type, PyObject **value, PyObject **tb) {
+    PyObject *tmp_type, *tmp_value, *tmp_tb;
+    PyErr_GetExcInfo(&tmp_type, &tmp_value, &tmp_tb);
+    PyErr_SetExcInfo(*type, *value, *tb);
+    *type = tmp_type;
+    *value = tmp_value;
+    *tb = tmp_tb;
+}
+#endif
+
+/* GetItemInt */
+static PyObject *__Pyx_GetItemInt_Generic(PyObject *o, PyObject* j) {
+    PyObject *r;
+    if (unlikely(!j)) return NULL;
+    r = PyObject_GetItem(o, j);
+    Py_DECREF(j);
+    return r;
+}
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_List_Fast(PyObject *o, Py_ssize_t i,
+                                                              CYTHON_NCP_UNUSED int wraparound,
+                                                              CYTHON_NCP_UNUSED int boundscheck) {
+#if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+    Py_ssize_t wrapped_i = i;
+    if (wraparound & unlikely(i < 0)) {
+        wrapped_i += PyList_GET_SIZE(o);
+    }
+    if ((!boundscheck) || likely(__Pyx_is_valid_index(wrapped_i, PyList_GET_SIZE(o)))) {
+        PyObject *r = PyList_GET_ITEM(o, wrapped_i);
+        Py_INCREF(r);
+        return r;
+    }
+    return __Pyx_GetItemInt_Generic(o, PyInt_FromSsize_t(i));
+#else
+    return PySequence_GetItem(o, i);
+#endif
+}
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_Tuple_Fast(PyObject *o, Py_ssize_t i,
+                                                              CYTHON_NCP_UNUSED int wraparound,
+                                                              CYTHON_NCP_UNUSED int boundscheck) {
+#if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+    Py_ssize_t wrapped_i = i;
+    if (wraparound & unlikely(i < 0)) {
+        wrapped_i += PyTuple_GET_SIZE(o);
+    }
+    if ((!boundscheck) || likely(__Pyx_is_valid_index(wrapped_i, PyTuple_GET_SIZE(o)))) {
+        PyObject *r = PyTuple_GET_ITEM(o, wrapped_i);
+        Py_INCREF(r);
+        return r;
+    }
+    return __Pyx_GetItemInt_Generic(o, PyInt_FromSsize_t(i));
+#else
+    return PySequence_GetItem(o, i);
+#endif
+}
+static CYTHON_INLINE PyObject *__Pyx_GetItemInt_Fast(PyObject *o, Py_ssize_t i, int is_list,
+                                                     CYTHON_NCP_UNUSED int wraparound,
+                                                     CYTHON_NCP_UNUSED int boundscheck) {
+#if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS && CYTHON_USE_TYPE_SLOTS
+    if (is_list || PyList_CheckExact(o)) {
+        Py_ssize_t n = ((!wraparound) | likely(i >= 0)) ? i : i + PyList_GET_SIZE(o);
+        if ((!boundscheck) || (likely(__Pyx_is_valid_index(n, PyList_GET_SIZE(o))))) {
+            PyObject *r = PyList_GET_ITEM(o, n);
+            Py_INCREF(r);
+            return r;
+        }
+    }
+    else if (PyTuple_CheckExact(o)) {
+        Py_ssize_t n = ((!wraparound) | likely(i >= 0)) ? i : i + PyTuple_GET_SIZE(o);
+        if ((!boundscheck) || likely(__Pyx_is_valid_index(n, PyTuple_GET_SIZE(o)))) {
+            PyObject *r = PyTuple_GET_ITEM(o, n);
+            Py_INCREF(r);
+            return r;
+        }
+    } else {
+        PyMappingMethods *mm = Py_TYPE(o)->tp_as_mapping;
+        PySequenceMethods *sm = Py_TYPE(o)->tp_as_sequence;
+        if (mm && mm->mp_subscript) {
+            PyObject *r, *key = PyInt_FromSsize_t(i);
+            if (unlikely(!key)) return NULL;
+            r = mm->mp_subscript(o, key);
+            Py_DECREF(key);
+            return r;
+        }
+        if (likely(sm && sm->sq_item)) {
+            if (wraparound && unlikely(i < 0) && likely(sm->sq_length)) {
+                Py_ssize_t l = sm->sq_length(o);
+                if (likely(l >= 0)) {
+                    i += l;
+                } else {
+                    if (!PyErr_ExceptionMatches(PyExc_OverflowError))
+                        return NULL;
+                    PyErr_Clear();
+                }
+            }
+            return sm->sq_item(o, i);
+        }
+    }
+#else
+    if (is_list || !PyMapping_Check(o)) {
+        return PySequence_GetItem(o, i);
+    }
+#endif
+    return __Pyx_GetItemInt_Generic(o, PyInt_FromSsize_t(i));
 }
 
 /* TypeImport */
@@ -10170,7 +13507,7 @@ static PyObject* __Pyx_ImportFrom(PyObject* module, PyObject* name) {
         if (unlikely(!module_name_str)) { goto modbad; }
         module_name = PyUnicode_FromString(module_name_str);
         if (unlikely(!module_name)) { goto modbad; }
-        module_dot = PyUnicode_Concat(module_name, __pyx_kp_u__14);
+        module_dot = PyUnicode_Concat(module_name, __pyx_kp_u__25);
         if (unlikely(!module_dot)) { goto modbad; }
         full_name = PyUnicode_Concat(module_dot, name);
         if (unlikely(!full_name)) { goto modbad; }
@@ -10198,6 +13535,134 @@ static PyObject* __Pyx_ImportFrom(PyObject* module, PyObject* name) {
         #endif
     }
     return value;
+}
+
+/* ImportDottedModule */
+#if PY_MAJOR_VERSION >= 3
+static PyObject *__Pyx__ImportDottedModule_Error(PyObject *name, PyObject *parts_tuple, Py_ssize_t count) {
+    PyObject *partial_name = NULL, *slice = NULL, *sep = NULL;
+    if (unlikely(PyErr_Occurred())) {
+        PyErr_Clear();
+    }
+    if (likely(PyTuple_GET_SIZE(parts_tuple) == count)) {
+        partial_name = name;
+    } else {
+        slice = PySequence_GetSlice(parts_tuple, 0, count);
+        if (unlikely(!slice))
+            goto bad;
+        sep = PyUnicode_FromStringAndSize(".", 1);
+        if (unlikely(!sep))
+            goto bad;
+        partial_name = PyUnicode_Join(sep, slice);
+    }
+    PyErr_Format(
+#if PY_MAJOR_VERSION < 3
+        PyExc_ImportError,
+        "No module named '%s'", PyString_AS_STRING(partial_name));
+#else
+#if PY_VERSION_HEX >= 0x030600B1
+        PyExc_ModuleNotFoundError,
+#else
+        PyExc_ImportError,
+#endif
+        "No module named '%U'", partial_name);
+#endif
+bad:
+    Py_XDECREF(sep);
+    Py_XDECREF(slice);
+    Py_XDECREF(partial_name);
+    return NULL;
+}
+#endif
+#if PY_MAJOR_VERSION >= 3
+static PyObject *__Pyx__ImportDottedModule_Lookup(PyObject *name) {
+    PyObject *imported_module;
+#if PY_VERSION_HEX < 0x030700A1 || (CYTHON_COMPILING_IN_PYPY && PYPY_VERSION_NUM  < 0x07030400)
+    PyObject *modules = PyImport_GetModuleDict();
+    if (unlikely(!modules))
+        return NULL;
+    imported_module = __Pyx_PyDict_GetItemStr(modules, name);
+    Py_XINCREF(imported_module);
+#else
+    imported_module = PyImport_GetModule(name);
+#endif
+    return imported_module;
+}
+#endif
+#if PY_MAJOR_VERSION >= 3
+static PyObject *__Pyx_ImportDottedModule_WalkParts(PyObject *module, PyObject *name, PyObject *parts_tuple) {
+    Py_ssize_t i, nparts;
+    nparts = PyTuple_GET_SIZE(parts_tuple);
+    for (i=1; i < nparts && module; i++) {
+        PyObject *part, *submodule;
+#if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+        part = PyTuple_GET_ITEM(parts_tuple, i);
+#else
+        part = PySequence_ITEM(parts_tuple, i);
+#endif
+        submodule = __Pyx_PyObject_GetAttrStrNoError(module, part);
+#if !(CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS)
+        Py_DECREF(part);
+#endif
+        Py_DECREF(module);
+        module = submodule;
+    }
+    if (unlikely(!module)) {
+        return __Pyx__ImportDottedModule_Error(name, parts_tuple, i);
+    }
+    return module;
+}
+#endif
+static PyObject *__Pyx__ImportDottedModule(PyObject *name, PyObject *parts_tuple) {
+#if PY_MAJOR_VERSION < 3
+    PyObject *module, *from_list, *star = __pyx_n_s__26;
+    CYTHON_UNUSED_VAR(parts_tuple);
+    from_list = PyList_New(1);
+    if (unlikely(!from_list))
+        return NULL;
+    Py_INCREF(star);
+    PyList_SET_ITEM(from_list, 0, star);
+    module = __Pyx_Import(name, from_list, 0);
+    Py_DECREF(from_list);
+    return module;
+#else
+    PyObject *imported_module;
+    PyObject *module = __Pyx_Import(name, NULL, 0);
+    if (!parts_tuple || unlikely(!module))
+        return module;
+    imported_module = __Pyx__ImportDottedModule_Lookup(name);
+    if (likely(imported_module)) {
+        Py_DECREF(module);
+        return imported_module;
+    }
+    PyErr_Clear();
+    return __Pyx_ImportDottedModule_WalkParts(module, name, parts_tuple);
+#endif
+}
+static PyObject *__Pyx_ImportDottedModule(PyObject *name, PyObject *parts_tuple) {
+#if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030400B1
+    PyObject *module = __Pyx__ImportDottedModule_Lookup(name);
+    if (likely(module)) {
+        PyObject *spec = __Pyx_PyObject_GetAttrStrNoError(module, __pyx_n_s_spec);
+        if (likely(spec)) {
+            PyObject *unsafe = __Pyx_PyObject_GetAttrStrNoError(spec, __pyx_n_s_initializing);
+            if (likely(!unsafe || !__Pyx_PyObject_IsTrue(unsafe))) {
+                Py_DECREF(spec);
+                spec = NULL;
+            }
+            Py_XDECREF(unsafe);
+        }
+        if (likely(!spec)) {
+            PyErr_Clear();
+            return module;
+        }
+        Py_DECREF(spec);
+        Py_DECREF(module);
+    } else if (PyErr_Occurred()) {
+        PyErr_Clear();
+    }
+#endif
+    return __Pyx__ImportDottedModule(name, parts_tuple);
 }
 
 /* FixUpExtensionType */
@@ -11819,6 +15284,77 @@ static PyObject* __pyx_convert__to_py_struct____pyx_t_6tablut_Bitboard(struct __
   Py_DECREF(res);
   return NULL;
 }
+/* CIntToPy */
+static CYTHON_INLINE PyObject* __Pyx_PyInt_From_uint64_t(uint64_t value) {
+#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+    const uint64_t neg_one = (uint64_t) -1, const_zero = (uint64_t) 0;
+#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+    const int is_unsigned = neg_one > const_zero;
+    if (is_unsigned) {
+        if (sizeof(uint64_t) < sizeof(long)) {
+            return PyInt_FromLong((long) value);
+        } else if (sizeof(uint64_t) <= sizeof(unsigned long)) {
+            return PyLong_FromUnsignedLong((unsigned long) value);
+#ifdef HAVE_LONG_LONG
+        } else if (sizeof(uint64_t) <= sizeof(unsigned PY_LONG_LONG)) {
+            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
+#endif
+        }
+    } else {
+        if (sizeof(uint64_t) <= sizeof(long)) {
+            return PyInt_FromLong((long) value);
+#ifdef HAVE_LONG_LONG
+        } else if (sizeof(uint64_t) <= sizeof(PY_LONG_LONG)) {
+            return PyLong_FromLongLong((PY_LONG_LONG) value);
+#endif
+        }
+    }
+    {
+        unsigned char *bytes = (unsigned char *)&value;
+#if !CYTHON_COMPILING_IN_LIMITED_API && PY_VERSION_HEX >= 0x030d00A4
+        if (is_unsigned) {
+            return PyLong_FromUnsignedNativeBytes(bytes, sizeof(value), -1);
+        } else {
+            return PyLong_FromNativeBytes(bytes, sizeof(value), -1);
+        }
+#elif !CYTHON_COMPILING_IN_LIMITED_API && PY_VERSION_HEX < 0x030d0000
+        int one = 1; int little = (int)*(unsigned char *)&one;
+        return _PyLong_FromByteArray(bytes, sizeof(uint64_t),
+                                     little, !is_unsigned);
+#else
+        int one = 1; int little = (int)*(unsigned char *)&one;
+        PyObject *from_bytes, *result = NULL;
+        PyObject *py_bytes = NULL, *arg_tuple = NULL, *kwds = NULL, *order_str = NULL;
+        from_bytes = PyObject_GetAttrString((PyObject*)&PyLong_Type, "from_bytes");
+        if (!from_bytes) return NULL;
+        py_bytes = PyBytes_FromStringAndSize((char*)bytes, sizeof(uint64_t));
+        if (!py_bytes) goto limited_bad;
+        order_str = PyUnicode_FromString(little ? "little" : "big");
+        if (!order_str) goto limited_bad;
+        arg_tuple = PyTuple_Pack(2, py_bytes, order_str);
+        if (!arg_tuple) goto limited_bad;
+        if (!is_unsigned) {
+            kwds = PyDict_New();
+            if (!kwds) goto limited_bad;
+            if (PyDict_SetItemString(kwds, "signed", __Pyx_NewRef(Py_True))) goto limited_bad;
+        }
+        result = PyObject_Call(from_bytes, arg_tuple, kwds);
+        limited_bad:
+        Py_XDECREF(kwds);
+        Py_XDECREF(arg_tuple);
+        Py_XDECREF(order_str);
+        Py_XDECREF(py_bytes);
+        Py_XDECREF(from_bytes);
+        return result;
+#endif
+    }
+}
+
 /* CIntFromPy */
 static CYTHON_INLINE uint64_t __Pyx_PyInt_As_uint64_t(PyObject *x) {
 #ifdef __Pyx_HAS_GCC_DIAGNOSTIC
@@ -12354,77 +15890,6 @@ raise_neg_overflow:
 }
 
 /* CIntToPy */
-static CYTHON_INLINE PyObject* __Pyx_PyInt_From_uint64_t(uint64_t value) {
-#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wconversion"
-#endif
-    const uint64_t neg_one = (uint64_t) -1, const_zero = (uint64_t) 0;
-#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
-#pragma GCC diagnostic pop
-#endif
-    const int is_unsigned = neg_one > const_zero;
-    if (is_unsigned) {
-        if (sizeof(uint64_t) < sizeof(long)) {
-            return PyInt_FromLong((long) value);
-        } else if (sizeof(uint64_t) <= sizeof(unsigned long)) {
-            return PyLong_FromUnsignedLong((unsigned long) value);
-#ifdef HAVE_LONG_LONG
-        } else if (sizeof(uint64_t) <= sizeof(unsigned PY_LONG_LONG)) {
-            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
-#endif
-        }
-    } else {
-        if (sizeof(uint64_t) <= sizeof(long)) {
-            return PyInt_FromLong((long) value);
-#ifdef HAVE_LONG_LONG
-        } else if (sizeof(uint64_t) <= sizeof(PY_LONG_LONG)) {
-            return PyLong_FromLongLong((PY_LONG_LONG) value);
-#endif
-        }
-    }
-    {
-        unsigned char *bytes = (unsigned char *)&value;
-#if !CYTHON_COMPILING_IN_LIMITED_API && PY_VERSION_HEX >= 0x030d00A4
-        if (is_unsigned) {
-            return PyLong_FromUnsignedNativeBytes(bytes, sizeof(value), -1);
-        } else {
-            return PyLong_FromNativeBytes(bytes, sizeof(value), -1);
-        }
-#elif !CYTHON_COMPILING_IN_LIMITED_API && PY_VERSION_HEX < 0x030d0000
-        int one = 1; int little = (int)*(unsigned char *)&one;
-        return _PyLong_FromByteArray(bytes, sizeof(uint64_t),
-                                     little, !is_unsigned);
-#else
-        int one = 1; int little = (int)*(unsigned char *)&one;
-        PyObject *from_bytes, *result = NULL;
-        PyObject *py_bytes = NULL, *arg_tuple = NULL, *kwds = NULL, *order_str = NULL;
-        from_bytes = PyObject_GetAttrString((PyObject*)&PyLong_Type, "from_bytes");
-        if (!from_bytes) return NULL;
-        py_bytes = PyBytes_FromStringAndSize((char*)bytes, sizeof(uint64_t));
-        if (!py_bytes) goto limited_bad;
-        order_str = PyUnicode_FromString(little ? "little" : "big");
-        if (!order_str) goto limited_bad;
-        arg_tuple = PyTuple_Pack(2, py_bytes, order_str);
-        if (!arg_tuple) goto limited_bad;
-        if (!is_unsigned) {
-            kwds = PyDict_New();
-            if (!kwds) goto limited_bad;
-            if (PyDict_SetItemString(kwds, "signed", __Pyx_NewRef(Py_True))) goto limited_bad;
-        }
-        result = PyObject_Call(from_bytes, arg_tuple, kwds);
-        limited_bad:
-        Py_XDECREF(kwds);
-        Py_XDECREF(arg_tuple);
-        Py_XDECREF(order_str);
-        Py_XDECREF(py_bytes);
-        Py_XDECREF(from_bytes);
-        return result;
-#endif
-    }
-}
-
-/* CIntToPy */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_long(long value) {
 #ifdef __Pyx_HAS_GCC_DIAGNOSTIC
 #pragma GCC diagnostic push
@@ -12493,273 +15958,6 @@ static CYTHON_INLINE PyObject* __Pyx_PyInt_From_long(long value) {
         return result;
 #endif
     }
-}
-
-/* CIntFromPy */
-static CYTHON_INLINE long __Pyx_PyInt_As_long(PyObject *x) {
-#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wconversion"
-#endif
-    const long neg_one = (long) -1, const_zero = (long) 0;
-#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
-#pragma GCC diagnostic pop
-#endif
-    const int is_unsigned = neg_one > const_zero;
-#if PY_MAJOR_VERSION < 3
-    if (likely(PyInt_Check(x))) {
-        if ((sizeof(long) < sizeof(long))) {
-            __PYX_VERIFY_RETURN_INT(long, long, PyInt_AS_LONG(x))
-        } else {
-            long val = PyInt_AS_LONG(x);
-            if (is_unsigned && unlikely(val < 0)) {
-                goto raise_neg_overflow;
-            }
-            return (long) val;
-        }
-    }
-#endif
-    if (unlikely(!PyLong_Check(x))) {
-        long val;
-        PyObject *tmp = __Pyx_PyNumber_IntOrLong(x);
-        if (!tmp) return (long) -1;
-        val = __Pyx_PyInt_As_long(tmp);
-        Py_DECREF(tmp);
-        return val;
-    }
-    if (is_unsigned) {
-#if CYTHON_USE_PYLONG_INTERNALS
-        if (unlikely(__Pyx_PyLong_IsNeg(x))) {
-            goto raise_neg_overflow;
-        } else if (__Pyx_PyLong_IsCompact(x)) {
-            __PYX_VERIFY_RETURN_INT(long, __Pyx_compact_upylong, __Pyx_PyLong_CompactValueUnsigned(x))
-        } else {
-            const digit* digits = __Pyx_PyLong_Digits(x);
-            assert(__Pyx_PyLong_DigitCount(x) > 1);
-            switch (__Pyx_PyLong_DigitCount(x)) {
-                case 2:
-                    if ((8 * sizeof(long) > 1 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) >= 2 * PyLong_SHIFT)) {
-                            return (long) (((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
-                        }
-                    }
-                    break;
-                case 3:
-                    if ((8 * sizeof(long) > 2 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) >= 3 * PyLong_SHIFT)) {
-                            return (long) (((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
-                        }
-                    }
-                    break;
-                case 4:
-                    if ((8 * sizeof(long) > 3 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) >= 4 * PyLong_SHIFT)) {
-                            return (long) (((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
-                        }
-                    }
-                    break;
-            }
-        }
-#endif
-#if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX < 0x030C00A7
-        if (unlikely(Py_SIZE(x) < 0)) {
-            goto raise_neg_overflow;
-        }
-#else
-        {
-            int result = PyObject_RichCompareBool(x, Py_False, Py_LT);
-            if (unlikely(result < 0))
-                return (long) -1;
-            if (unlikely(result == 1))
-                goto raise_neg_overflow;
-        }
-#endif
-        if ((sizeof(long) <= sizeof(unsigned long))) {
-            __PYX_VERIFY_RETURN_INT_EXC(long, unsigned long, PyLong_AsUnsignedLong(x))
-#ifdef HAVE_LONG_LONG
-        } else if ((sizeof(long) <= sizeof(unsigned PY_LONG_LONG))) {
-            __PYX_VERIFY_RETURN_INT_EXC(long, unsigned PY_LONG_LONG, PyLong_AsUnsignedLongLong(x))
-#endif
-        }
-    } else {
-#if CYTHON_USE_PYLONG_INTERNALS
-        if (__Pyx_PyLong_IsCompact(x)) {
-            __PYX_VERIFY_RETURN_INT(long, __Pyx_compact_pylong, __Pyx_PyLong_CompactValue(x))
-        } else {
-            const digit* digits = __Pyx_PyLong_Digits(x);
-            assert(__Pyx_PyLong_DigitCount(x) > 1);
-            switch (__Pyx_PyLong_SignedDigitCount(x)) {
-                case -2:
-                    if ((8 * sizeof(long) - 1 > 1 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
-                            return (long) (((long)-1)*(((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-                case 2:
-                    if ((8 * sizeof(long) > 1 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
-                            return (long) ((((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-                case -3:
-                    if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
-                            return (long) (((long)-1)*(((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-                case 3:
-                    if ((8 * sizeof(long) > 2 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
-                            return (long) ((((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-                case -4:
-                    if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 4 * PyLong_SHIFT)) {
-                            return (long) (((long)-1)*(((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-                case 4:
-                    if ((8 * sizeof(long) > 3 * PyLong_SHIFT)) {
-                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
-                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if ((8 * sizeof(long) - 1 > 4 * PyLong_SHIFT)) {
-                            return (long) ((((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
-                        }
-                    }
-                    break;
-            }
-        }
-#endif
-        if ((sizeof(long) <= sizeof(long))) {
-            __PYX_VERIFY_RETURN_INT_EXC(long, long, PyLong_AsLong(x))
-#ifdef HAVE_LONG_LONG
-        } else if ((sizeof(long) <= sizeof(PY_LONG_LONG))) {
-            __PYX_VERIFY_RETURN_INT_EXC(long, PY_LONG_LONG, PyLong_AsLongLong(x))
-#endif
-        }
-    }
-    {
-        long val;
-        int ret = -1;
-#if PY_VERSION_HEX >= 0x030d00A6 && !CYTHON_COMPILING_IN_LIMITED_API
-        Py_ssize_t bytes_copied = PyLong_AsNativeBytes(
-            x, &val, sizeof(val), Py_ASNATIVEBYTES_NATIVE_ENDIAN | (is_unsigned ? Py_ASNATIVEBYTES_UNSIGNED_BUFFER | Py_ASNATIVEBYTES_REJECT_NEGATIVE : 0));
-        if (unlikely(bytes_copied == -1)) {
-        } else if (unlikely(bytes_copied > (Py_ssize_t) sizeof(val))) {
-            goto raise_overflow;
-        } else {
-            ret = 0;
-        }
-#elif PY_VERSION_HEX < 0x030d0000 && !(CYTHON_COMPILING_IN_PYPY || CYTHON_COMPILING_IN_LIMITED_API) || defined(_PyLong_AsByteArray)
-        int one = 1; int is_little = (int)*(unsigned char *)&one;
-        unsigned char *bytes = (unsigned char *)&val;
-        ret = _PyLong_AsByteArray((PyLongObject *)x,
-                                    bytes, sizeof(val),
-                                    is_little, !is_unsigned);
-#else
-        PyObject *v;
-        PyObject *stepval = NULL, *mask = NULL, *shift = NULL;
-        int bits, remaining_bits, is_negative = 0;
-        int chunk_size = (sizeof(long) < 8) ? 30 : 62;
-        if (likely(PyLong_CheckExact(x))) {
-            v = __Pyx_NewRef(x);
-        } else {
-            v = PyNumber_Long(x);
-            if (unlikely(!v)) return (long) -1;
-            assert(PyLong_CheckExact(v));
-        }
-        {
-            int result = PyObject_RichCompareBool(v, Py_False, Py_LT);
-            if (unlikely(result < 0)) {
-                Py_DECREF(v);
-                return (long) -1;
-            }
-            is_negative = result == 1;
-        }
-        if (is_unsigned && unlikely(is_negative)) {
-            Py_DECREF(v);
-            goto raise_neg_overflow;
-        } else if (is_negative) {
-            stepval = PyNumber_Invert(v);
-            Py_DECREF(v);
-            if (unlikely(!stepval))
-                return (long) -1;
-        } else {
-            stepval = v;
-        }
-        v = NULL;
-        val = (long) 0;
-        mask = PyLong_FromLong((1L << chunk_size) - 1); if (unlikely(!mask)) goto done;
-        shift = PyLong_FromLong(chunk_size); if (unlikely(!shift)) goto done;
-        for (bits = 0; bits < (int) sizeof(long) * 8 - chunk_size; bits += chunk_size) {
-            PyObject *tmp, *digit;
-            long idigit;
-            digit = PyNumber_And(stepval, mask);
-            if (unlikely(!digit)) goto done;
-            idigit = PyLong_AsLong(digit);
-            Py_DECREF(digit);
-            if (unlikely(idigit < 0)) goto done;
-            val |= ((long) idigit) << bits;
-            tmp = PyNumber_Rshift(stepval, shift);
-            if (unlikely(!tmp)) goto done;
-            Py_DECREF(stepval); stepval = tmp;
-        }
-        Py_DECREF(shift); shift = NULL;
-        Py_DECREF(mask); mask = NULL;
-        {
-            long idigit = PyLong_AsLong(stepval);
-            if (unlikely(idigit < 0)) goto done;
-            remaining_bits = ((int) sizeof(long) * 8) - bits - (is_unsigned ? 0 : 1);
-            if (unlikely(idigit >= (1L << remaining_bits)))
-                goto raise_overflow;
-            val |= ((long) idigit) << bits;
-        }
-        if (!is_unsigned) {
-            if (unlikely(val & (((long) 1) << (sizeof(long) * 8 - 1))))
-                goto raise_overflow;
-            if (is_negative)
-                val = ~val;
-        }
-        ret = 0;
-    done:
-        Py_XDECREF(shift);
-        Py_XDECREF(mask);
-        Py_XDECREF(stepval);
-#endif
-        if (unlikely(ret))
-            return (long) -1;
-        return val;
-    }
-raise_overflow:
-    PyErr_SetString(PyExc_OverflowError,
-        "value too large to convert to long");
-    return (long) -1;
-raise_neg_overflow:
-    PyErr_SetString(PyExc_OverflowError,
-        "can't convert negative value to long");
-    return (long) -1;
 }
 
 /* CIntToPy */
@@ -13110,11 +16308,278 @@ __Pyx_PyType_GetName(PyTypeObject* tp)
     if (unlikely(name == NULL) || unlikely(!PyUnicode_Check(name))) {
         PyErr_Clear();
         Py_XDECREF(name);
-        name = __Pyx_NewRef(__pyx_n_s__24);
+        name = __Pyx_NewRef(__pyx_n_s__39);
     }
     return name;
 }
 #endif
+
+/* CIntFromPy */
+static CYTHON_INLINE long __Pyx_PyInt_As_long(PyObject *x) {
+#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+    const long neg_one = (long) -1, const_zero = (long) 0;
+#ifdef __Pyx_HAS_GCC_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+    const int is_unsigned = neg_one > const_zero;
+#if PY_MAJOR_VERSION < 3
+    if (likely(PyInt_Check(x))) {
+        if ((sizeof(long) < sizeof(long))) {
+            __PYX_VERIFY_RETURN_INT(long, long, PyInt_AS_LONG(x))
+        } else {
+            long val = PyInt_AS_LONG(x);
+            if (is_unsigned && unlikely(val < 0)) {
+                goto raise_neg_overflow;
+            }
+            return (long) val;
+        }
+    }
+#endif
+    if (unlikely(!PyLong_Check(x))) {
+        long val;
+        PyObject *tmp = __Pyx_PyNumber_IntOrLong(x);
+        if (!tmp) return (long) -1;
+        val = __Pyx_PyInt_As_long(tmp);
+        Py_DECREF(tmp);
+        return val;
+    }
+    if (is_unsigned) {
+#if CYTHON_USE_PYLONG_INTERNALS
+        if (unlikely(__Pyx_PyLong_IsNeg(x))) {
+            goto raise_neg_overflow;
+        } else if (__Pyx_PyLong_IsCompact(x)) {
+            __PYX_VERIFY_RETURN_INT(long, __Pyx_compact_upylong, __Pyx_PyLong_CompactValueUnsigned(x))
+        } else {
+            const digit* digits = __Pyx_PyLong_Digits(x);
+            assert(__Pyx_PyLong_DigitCount(x) > 1);
+            switch (__Pyx_PyLong_DigitCount(x)) {
+                case 2:
+                    if ((8 * sizeof(long) > 1 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) >= 2 * PyLong_SHIFT)) {
+                            return (long) (((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
+                        }
+                    }
+                    break;
+                case 3:
+                    if ((8 * sizeof(long) > 2 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) >= 3 * PyLong_SHIFT)) {
+                            return (long) (((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
+                        }
+                    }
+                    break;
+                case 4:
+                    if ((8 * sizeof(long) > 3 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) >= 4 * PyLong_SHIFT)) {
+                            return (long) (((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0]));
+                        }
+                    }
+                    break;
+            }
+        }
+#endif
+#if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX < 0x030C00A7
+        if (unlikely(Py_SIZE(x) < 0)) {
+            goto raise_neg_overflow;
+        }
+#else
+        {
+            int result = PyObject_RichCompareBool(x, Py_False, Py_LT);
+            if (unlikely(result < 0))
+                return (long) -1;
+            if (unlikely(result == 1))
+                goto raise_neg_overflow;
+        }
+#endif
+        if ((sizeof(long) <= sizeof(unsigned long))) {
+            __PYX_VERIFY_RETURN_INT_EXC(long, unsigned long, PyLong_AsUnsignedLong(x))
+#ifdef HAVE_LONG_LONG
+        } else if ((sizeof(long) <= sizeof(unsigned PY_LONG_LONG))) {
+            __PYX_VERIFY_RETURN_INT_EXC(long, unsigned PY_LONG_LONG, PyLong_AsUnsignedLongLong(x))
+#endif
+        }
+    } else {
+#if CYTHON_USE_PYLONG_INTERNALS
+        if (__Pyx_PyLong_IsCompact(x)) {
+            __PYX_VERIFY_RETURN_INT(long, __Pyx_compact_pylong, __Pyx_PyLong_CompactValue(x))
+        } else {
+            const digit* digits = __Pyx_PyLong_Digits(x);
+            assert(__Pyx_PyLong_DigitCount(x) > 1);
+            switch (__Pyx_PyLong_SignedDigitCount(x)) {
+                case -2:
+                    if ((8 * sizeof(long) - 1 > 1 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
+                            return (long) (((long)-1)*(((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+                case 2:
+                    if ((8 * sizeof(long) > 1 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 2 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
+                            return (long) ((((((long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+                case -3:
+                    if ((8 * sizeof(long) - 1 > 2 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
+                            return (long) (((long)-1)*(((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+                case 3:
+                    if ((8 * sizeof(long) > 2 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 3 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
+                            return (long) ((((((((long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+                case -4:
+                    if ((8 * sizeof(long) - 1 > 3 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, long, -(long) (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 4 * PyLong_SHIFT)) {
+                            return (long) (((long)-1)*(((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+                case 4:
+                    if ((8 * sizeof(long) > 3 * PyLong_SHIFT)) {
+                        if ((8 * sizeof(unsigned long) > 4 * PyLong_SHIFT)) {
+                            __PYX_VERIFY_RETURN_INT(long, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
+                        } else if ((8 * sizeof(long) - 1 > 4 * PyLong_SHIFT)) {
+                            return (long) ((((((((((long)digits[3]) << PyLong_SHIFT) | (long)digits[2]) << PyLong_SHIFT) | (long)digits[1]) << PyLong_SHIFT) | (long)digits[0])));
+                        }
+                    }
+                    break;
+            }
+        }
+#endif
+        if ((sizeof(long) <= sizeof(long))) {
+            __PYX_VERIFY_RETURN_INT_EXC(long, long, PyLong_AsLong(x))
+#ifdef HAVE_LONG_LONG
+        } else if ((sizeof(long) <= sizeof(PY_LONG_LONG))) {
+            __PYX_VERIFY_RETURN_INT_EXC(long, PY_LONG_LONG, PyLong_AsLongLong(x))
+#endif
+        }
+    }
+    {
+        long val;
+        int ret = -1;
+#if PY_VERSION_HEX >= 0x030d00A6 && !CYTHON_COMPILING_IN_LIMITED_API
+        Py_ssize_t bytes_copied = PyLong_AsNativeBytes(
+            x, &val, sizeof(val), Py_ASNATIVEBYTES_NATIVE_ENDIAN | (is_unsigned ? Py_ASNATIVEBYTES_UNSIGNED_BUFFER | Py_ASNATIVEBYTES_REJECT_NEGATIVE : 0));
+        if (unlikely(bytes_copied == -1)) {
+        } else if (unlikely(bytes_copied > (Py_ssize_t) sizeof(val))) {
+            goto raise_overflow;
+        } else {
+            ret = 0;
+        }
+#elif PY_VERSION_HEX < 0x030d0000 && !(CYTHON_COMPILING_IN_PYPY || CYTHON_COMPILING_IN_LIMITED_API) || defined(_PyLong_AsByteArray)
+        int one = 1; int is_little = (int)*(unsigned char *)&one;
+        unsigned char *bytes = (unsigned char *)&val;
+        ret = _PyLong_AsByteArray((PyLongObject *)x,
+                                    bytes, sizeof(val),
+                                    is_little, !is_unsigned);
+#else
+        PyObject *v;
+        PyObject *stepval = NULL, *mask = NULL, *shift = NULL;
+        int bits, remaining_bits, is_negative = 0;
+        int chunk_size = (sizeof(long) < 8) ? 30 : 62;
+        if (likely(PyLong_CheckExact(x))) {
+            v = __Pyx_NewRef(x);
+        } else {
+            v = PyNumber_Long(x);
+            if (unlikely(!v)) return (long) -1;
+            assert(PyLong_CheckExact(v));
+        }
+        {
+            int result = PyObject_RichCompareBool(v, Py_False, Py_LT);
+            if (unlikely(result < 0)) {
+                Py_DECREF(v);
+                return (long) -1;
+            }
+            is_negative = result == 1;
+        }
+        if (is_unsigned && unlikely(is_negative)) {
+            Py_DECREF(v);
+            goto raise_neg_overflow;
+        } else if (is_negative) {
+            stepval = PyNumber_Invert(v);
+            Py_DECREF(v);
+            if (unlikely(!stepval))
+                return (long) -1;
+        } else {
+            stepval = v;
+        }
+        v = NULL;
+        val = (long) 0;
+        mask = PyLong_FromLong((1L << chunk_size) - 1); if (unlikely(!mask)) goto done;
+        shift = PyLong_FromLong(chunk_size); if (unlikely(!shift)) goto done;
+        for (bits = 0; bits < (int) sizeof(long) * 8 - chunk_size; bits += chunk_size) {
+            PyObject *tmp, *digit;
+            long idigit;
+            digit = PyNumber_And(stepval, mask);
+            if (unlikely(!digit)) goto done;
+            idigit = PyLong_AsLong(digit);
+            Py_DECREF(digit);
+            if (unlikely(idigit < 0)) goto done;
+            val |= ((long) idigit) << bits;
+            tmp = PyNumber_Rshift(stepval, shift);
+            if (unlikely(!tmp)) goto done;
+            Py_DECREF(stepval); stepval = tmp;
+        }
+        Py_DECREF(shift); shift = NULL;
+        Py_DECREF(mask); mask = NULL;
+        {
+            long idigit = PyLong_AsLong(stepval);
+            if (unlikely(idigit < 0)) goto done;
+            remaining_bits = ((int) sizeof(long) * 8) - bits - (is_unsigned ? 0 : 1);
+            if (unlikely(idigit >= (1L << remaining_bits)))
+                goto raise_overflow;
+            val |= ((long) idigit) << bits;
+        }
+        if (!is_unsigned) {
+            if (unlikely(val & (((long) 1) << (sizeof(long) * 8 - 1))))
+                goto raise_overflow;
+            if (is_negative)
+                val = ~val;
+        }
+        ret = 0;
+    done:
+        Py_XDECREF(shift);
+        Py_XDECREF(mask);
+        Py_XDECREF(stepval);
+#endif
+        if (unlikely(ret))
+            return (long) -1;
+        return val;
+    }
+raise_overflow:
+    PyErr_SetString(PyExc_OverflowError,
+        "value too large to convert to long");
+    return (long) -1;
+raise_neg_overflow:
+    PyErr_SetString(PyExc_OverflowError,
+        "can't convert negative value to long");
+    return (long) -1;
+}
 
 /* FastTypeChecks */
 #if CYTHON_COMPILING_IN_CPYTHON

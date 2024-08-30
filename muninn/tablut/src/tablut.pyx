@@ -1,5 +1,5 @@
 # cython: language_level=3
-
+#TODO: use all the constants I've defined
 #------------------------------------------------------------------------------
 # Imports and Type Declarations
 #------------------------------------------------------------------------------
@@ -12,6 +12,9 @@ from libc.stdlib cimport malloc, free
 from libc.stdlib cimport rand
 from libc.stddef cimport size_t
 import random
+from typing import List
+from cpython cimport array
+import array
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -22,9 +25,6 @@ import random
 ZERO = <uint64_t>0
 
 cdef struct Bitboard:
-    """
-    Bitboard object comprised of 2x 64-bit ULL. First 63 bits of low are used (representing bottom 7 rows). First 18 bits of high are used (representing top 2 rows).
-    """
     uint64_t low
     uint64_t high
 
@@ -373,9 +373,6 @@ cdef uint64_t transform(uint64_t key, uint64_t magic, int bits):
 # Build matching blocker subset and attack tables
 #-------------------------------------------------
 cdef struct BlockerMoveTables:
-    """
-    Table for finding magics. Contains 64-bit ULLs blockers, Bitboards moves, and entries size.
-    """
     uint64_t* blockers
     Bitboard* moves
     size_t size
@@ -451,11 +448,11 @@ cdef uint64_t find_magic(int square):
     - If it has been used, asserts that the moves are the same, allowing for constructive collisions.
     - If a magic succesfully hashes the entire array of possible blocker configurations, the magic is returned
     """
-    cdef Bitboard mask = get_blocker_mask(square)
+    cdef uint64_t mask = merge(get_blocker_mask(square))
     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
     cdef n_bits = BLOCKER_BITS[square]
-    cdef int k, i, index, fail, counter
+    cdef int k, i, index, fail, counter, max
     cdef uint64_t magic
     cdef uint64_t FAILED_MAGIC = ZERO
 
@@ -464,7 +461,8 @@ cdef uint64_t find_magic(int square):
         raise MemoryError("Failed to allocate memory for used array")
 
     try:
-        for k in range(100000000):
+        max = 0
+        for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
             magic = random_uint64_fewbits()
             if count_bits((mask * magic) & 0xFF00000000000000) < 6:
                 continue
@@ -481,27 +479,58 @@ cdef uint64_t find_magic(int square):
                 elif not same_board(used[index], tables.moves[counter]):
                     fail = 1
                 counter += 1
+                if counter > max:
+                    max = counter
+
 
             if fail == 0:
                 return magic
 
-        print(f"***Failed to find Magic for square {square}***")
+        print(f"***Failed to find Magic for square {square}. Best Magic passed first {max} entries ({max/tables.size})***")
         return FAILED_MAGIC
     finally:
         free(used)
         free_blocker_move_tables(&tables)
 
-def find_magics():
+def find_magics(squares=None):
     """
-    Python-accessible function to print the entire list of 81 magic numbers for each board square.
+    Python-accessible function to print magic numbers for specified board squares.
+
+    :param squares: List or array of square indices to find magics for. If None, finds magics for all squares.
     """
-    cdef int square = 0
-    print("****FINDING MAGICS****\n\n")
-    print("cdef uint64_t Magic[81] = [")
-    for square in tqdm(range(81)):
-        print(f"0x{find_magic(square):016X},")
-    print("]")
-    print("\n\n****COMPLETE****")
+    cdef array.array square_array
+    cdef int square, i
+    cdef uint64_t magic
+
+    if squares is None:
+        squares = range(81)
+
+    square_array = array.array('i', squares)
+
+    if min(square_array) < 0 or max(square_array) > 80:
+        raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
+
+    print("****FINDING MAGICS****\n")
+
+    magics = []
+    #for i in tqdm(range(len(square_array)), desc="Finding magic numbers", unit="square"):
+    for i in range(len(square_array)):
+        square = square_array[i]
+        magic = find_magic(square)
+        magics.append(f"0x{magic:016X}")
+
+    if len(square_array) == 81 and list(square_array) == list(range(81)):
+        print("cdef uint64_t Magic[81] = {")
+        for i, magic in enumerate(magics):
+            if i % 4 == 0 and i != 0:
+                print()
+            print(f"{magic},", end=" ")
+        print("\n}")
+    else:
+        for i in range(len(square_array)):
+            print(f"Square {square_array[i]} Magic: {magics[i]}")
+
+    print("\n****COMPLETE****")
 
 #==============================================================================
 # Python Acessible Tests

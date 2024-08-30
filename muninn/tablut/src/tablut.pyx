@@ -11,6 +11,7 @@ from tqdm import tqdm
 from libc.stdlib cimport malloc, free
 from libc.stdlib cimport rand
 from libc.stddef cimport size_t
+import random
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -18,9 +19,16 @@ from libc.stddef cimport size_t
 #------------------------------------------------------------------------------
 # Bitboard Struct and Mask Constants
 #------------------------------------------------------------------------------
+ZERO = <uint64_t>0
+
 cdef struct Bitboard:
+    """
+    Bitboard object comprised of 2x 64-bit ULL. First 63 bits of low are used (representing bottom 7 rows). First 18 bits of high are used (representing top 2 rows).
+    """
     uint64_t low
     uint64_t high
+
+cdef Bitboard EMPTY_BITBOARD = Bitboard(ZERO, ZERO)
 
 cdef Bitboard[81] BLOCKER_MASK = [
     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
@@ -105,8 +113,10 @@ cdef Bitboard[81] BLOCKER_MASK = [
     Bitboard(low = 0x2010080402010000, high = 0x000000000000FC80),
     Bitboard(low = 0x4020100804020000, high = 0x000000000001FD00)]
 
-# Fast, inline access function
 cdef inline Bitboard get_blocker_mask(int index):
+    """
+    Returns relevant blocker mask for a given square.
+    """
     return Bitboard(BLOCKER_MASK[index].low, BLOCKER_MASK[index].high)
 
 cdef int[81] BLOCKER_BITS = [
@@ -176,6 +186,18 @@ cdef Bitboard create_board():
     set_start_position(&bitboard)
     return bitboard
 
+cdef inline is_board_empty(Bitboard board):
+    """
+    Returns True if board has no bits set, else False
+    """
+    return board.low == 0 and board.high == 0
+
+cdef inline same_board(Bitboard board_1, Bitboard board_2):
+    """
+    Returns True if two given boards have the same set bits, else False.
+    """
+    return board_1.low == board_2.low and board_1.high == board_2.high
+
 def create_start_position():
     return create_board()
 
@@ -192,15 +214,12 @@ def print_board(Bitboard board):
     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")
 
 #------------------------------------------------------------------------------
-# Move Key Generation
+# Find Moves on the Fly
 #------------------------------------------------------------------------------
-
-
-#------------------------------------------------------------------------------
-# Magic Number Generation
-#------------------------------------------------------------------------------
-# find possible moves for a given square and boardstate on the fly
 cdef Bitboard find_moves_otf(Bitboard board, int square):
+    """
+    Calculates moves on the fly for a given Bitboard and square. Returns Bitboard moves.
+    """
     cdef Bitboard moves = Bitboard(0,0)
     cdef int j, rank, file
 
@@ -238,9 +257,14 @@ cdef Bitboard find_moves_otf(Bitboard board, int square):
     return moves
 
 #------------------------------------------------------------------------------
-# Generating Blocker Masks
+# Generating Blocker Masks, Blocker Bits
 #------------------------------------------------------------------------------
 cdef Bitboard build_blocker_masks(Bitboard board, int square):
+    """
+    Builds a mask showing the full set of blocker squares for a given Bitboard and square. Returns Bitboard with all blockers.
+
+    Use BLOCKER_MASK[square] instead, this was used primarily to build BLOCKER_MASK constants.
+    """
     cdef Bitboard blockers = Bitboard(0,0)
     cdef int j, rank, file
 
@@ -283,6 +307,9 @@ cdef Bitboard build_blocker_masks(Bitboard board, int square):
     return blockers
 
 cdef void print_masks():
+    """
+    Used to print BLOCKER_MASK array.
+    """
     cdef Bitboard bitboard
     cdef Bitboard blockers
     cdef int i
@@ -292,30 +319,11 @@ cdef void print_masks():
       set_bit(&bitboard, i)
       blockers = build_blocker_masks(bitboard, i)
       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
-"""
-cdef void iterate_subsets(Bitboard mask):
-    cdef uint64_t subset = 0
-    cdef uint64_t temp
-    cdef int counter = 0
-    cdef uint64_t merged_mask = merge(mask)
-    cdef Bitboard tmp = Bitboard(0,0)
-
-    while True:
-        counter += 1
-        print(counter)
-        # Use subset here
-        tmp.low = subset
-        print_board(tmp)
-
-        # Generate next subset
-        temp = (subset - merged_mask) & merged_mask
-        subset = temp
-
-        if subset == 0:
-            break
-"""
 
 cdef void print_relevant_bits():
+    """
+    Used to print BLOCKER_BITS array.
+    """
     cdef int i
     cdef Bitboard board = Bitboard(0,0)
     cdef int count
@@ -335,72 +343,47 @@ cdef void print_relevant_bits():
 # Random uint64 Generation
 #----------------------------------------
 cdef uint64_t random_u64():
+    """
+    Returns a random 64-bit ULL.
+
+    - uses Python's random module, which returns 32 bit int. We call this twice, shifting the first random int over 32 bits for a total of 64
+    """
     cdef uint64_t r = 0
-    for _ in range(5):  # We only need 5 iterations to fill 64 bits
-        r = (r << 15) | (rand() & 0x7FFF)
+    r = (random.randint(0, 0xFFFFFFFF) << 32) | random.randint(0, 0xFFFFFFFF)
     return r
+
+cdef uint64_t random_uint64_fewbits():
+    """
+    Returns a sparse random 64-bit ULL.
+
+    - we only want a few bits set, so 3 AND operations are performed. These magics are shown to be more successful.
+    """
+    return random_u64() & random_u64() & random_u64()
 
 #----------------------------------------
 # Magic Transformation
 #----------------------------------------
-cdef int transform(uint64_t key, uint64_t magic, int bits):
+cdef uint64_t transform(uint64_t key, uint64_t magic, int bits):
+    """
+    Applies the magic multiplation and right shift, returns a 64-bit ULL index.
+    """
     return (key * magic) >> (64 - bits)
 
 #-------------------------------------------------
 # Build matching blocker subset and attack tables
 #-------------------------------------------------
-"""
-cdef struct BlockerAttackTables():
-    uint64_t* blocker
-    uint64_t* attack
-
-cdef BlockerAttackTables build_blocker_attack_tables(int square):
-    cdef BlockerAttackTables tables
-    cdef Bitboard mask = BLOCKER_MASK(square)
-    cdef Bitboard tmp = Bitboard(0,0)
-    cdef uint64_t merged_mask = merge(mask)
-
-    tables.blocker = <uint64_t*>malloc((2**BLOCKER_BITS(square)) * sizeof(uint64_t))
-    tables.attack = <uint64_t*>malloc((2**BLOCKER_BITS(square)) * sizeof(Bitboard))
-
-    while True:
-
-
-cdef find_magic(int square, int bits):
-    uint64_t mask, blockers[16384], moves[16384], used[16384], magic
-    int i, j, k, n, fail
-
-    mask = merge(BLOCKER_MASK(square))
-    n = count_bits(mask)
-
-    for i in range(1 << n):
-        b[i] = index_to_uint64(i, n, mask)
-        a[i] =
-"""
-
-#==============================================================================
-# Python Acessible Tests
-#==============================================================================
-
-def print_blocker_masks():
-    print_masks()
-
-def print_blocker_bits():
-    print_relevant_bits()
-
-def test():
-    cdef uint64_t r = random_u64()
-    cdef Bitboard board = Bitboard(r, 0)
-    print(r)
-    print_board(board)
-#---------------------------------------------
-
 cdef struct BlockerMoveTables:
+    """
+    Table for finding magics. Contains 64-bit ULLs blockers, Bitboards moves, and entries size.
+    """
     uint64_t* blockers
     Bitboard* moves
     size_t size
 
 cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):
+    """
+    Carry Rippler trick for finding subsets of a set. Returns next subset (Bitboard).
+    """
     cdef Bitboard next
     cdef uint64_t carry
 
@@ -411,16 +394,27 @@ cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):
     return next
 
 cdef BlockerMoveTables build_blocker_move_tables(int square):
+    """
+    Building the Blocker / Move Tables. Returns constructed tables.
+
+    - for a square, gets relevant blocker mask
+    - instantiates tables and allocates memory
+    - uses Carry Rippler trick to calculate all possible subsets
+    - for each subset, calculates the corresponding legal moves
+    - sets table size as 2^blocker squares
+    """
     cdef BlockerMoveTables tables
     cdef Bitboard mask = get_blocker_mask(square)
     cdef Bitboard subset = Bitboard(0, 0)
     cdef int index = 0
 
     tables.size = 1 << BLOCKER_BITS[square]
-    print(BLOCKER_BITS[square])
-    print(tables.size)
     tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
     tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+
+    if tables.blockers == NULL or tables.moves == NULL:
+        free_blocker_move_tables(&tables)
+        raise MemoryError("Failed to allocate memory for blocker move tables")
 
     while True:
         tables.blockers[index] = merge(subset)
@@ -433,6 +427,9 @@ cdef BlockerMoveTables build_blocker_move_tables(int square):
     return tables
 
 cdef void free_blocker_move_tables(BlockerMoveTables* tables):
+    """
+    Sets Blocker / Move tables to NULL and frees allocated memory.
+    """
     if tables.blockers != NULL:
         free(tables.blockers)
         tables.blockers = NULL
@@ -441,29 +438,102 @@ cdef void free_blocker_move_tables(BlockerMoveTables* tables):
         tables.moves = NULL
     tables.size = 0
 
-def build_tables(int square):
+cdef uint64_t find_magic(int square):
+    """
+    Finds a magic number for a given square (0-80). Returns magic if succesful, else prints warning and returns an empty 64-bit ULL.
+
+    - Creates move tables for the square
+    - Creates a 'used' table for reference
+    - Iterates 100M times to find magic.
+    - Gets a magic candidate, filtering out unpromising candidates (with fewer than 6 of top 8 bits set).
+    - Creates an index through multiplication / right shift.
+    - If the index has not been used, allocates the moves to the used array.
+    - If it has been used, asserts that the moves are the same, allowing for constructive collisions.
+    - If a magic succesfully hashes the entire array of possible blocker configurations, the magic is returned
+    """
+    cdef Bitboard mask = get_blocker_mask(square)
+    cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+    cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+    cdef n_bits = BLOCKER_BITS[square]
+    cdef int k, i, index, fail, counter
+    cdef uint64_t magic
+    cdef uint64_t FAILED_MAGIC = ZERO
+
+    if used == NULL:
+        free_blocker_move_tables(&tables)
+        raise MemoryError("Failed to allocate memory for used array")
+
+    try:
+        for k in range(100000000):
+            magic = random_uint64_fewbits()
+            if count_bits((mask * magic) & 0xFF00000000000000) < 6:
+                continue
+
+            # Reset the used array
+            for i in range(tables.size):
+                used[i] = EMPTY_BITBOARD
+
+            fail, counter = 0, 0
+            while fail == 0 and counter < tables.size:
+                index = transform(tables.blockers[counter], magic, n_bits)
+                if is_board_empty(used[index]):
+                    used[index] = tables.moves[counter]
+                elif not same_board(used[index], tables.moves[counter]):
+                    fail = 1
+                counter += 1
+
+            if fail == 0:
+                return magic
+
+        print(f"***Failed to find Magic for square {square}***")
+        return FAILED_MAGIC
+    finally:
+        free(used)
+        free_blocker_move_tables(&tables)
+
+def find_magics():
+    """
+    Python-accessible function to print the entire list of 81 magic numbers for each board square.
+    """
+    cdef int square = 0
+    print("****FINDING MAGICS****\n\n")
+    print("cdef uint64_t Magic[81] = [")
+    for square in tqdm(range(81)):
+        print(f"0x{find_magic(square):016X},")
+    print("]")
+    print("\n\n****COMPLETE****")
+
+#==============================================================================
+# Python Acessible Tests
+#==============================================================================
+
+def print_blocker_masks():
+    """
+    Python-friendly function to print BLOCKER_MASK values
+    """
+    print_masks()
+
+def print_blocker_bits():
+    """
+    Python-friendly function to print BLOCKER_BITS values
+    """
+    print_relevant_bits()
+
+def test():
+    cdef uint64_t r = random_u64()
+    cdef Bitboard board = Bitboard(r, 0)
+    print(r)
+    print_board(board)
+#---------------------------------------------
+
+def py_build_bm_tables(int square):
+    """
+    Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
+    """
     cdef Bitboard tmp = Bitboard(0,0)
     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
     blockers = [tables.blockers[i] for i in range(tables.size)]
     moves = [tables.moves[i] for i in range(tables.size)]
-
-    # Print some sample data
-    tmp.low = tables.blockers[0]
-    print_board(tmp)
-    print_board(tables.moves[0])
-    print('----------------------------------')
-    tmp.low = tables.blockers[10]
-    print_board(tmp)
-    print_board(tables.moves[10])
-    print('----------------------------------')
-    tmp.low = tables.blockers[1000]
-    print_board(tmp)
-    print_board(tables.moves[1000])
-    print('----------------------------------')
-    tmp.low = tables.blockers[tables.size - 511]  # Use last valid index instead of -1
-    print_board(tmp)
-    print_board(tables.moves[tables.size - 511])
-    print('----------------------------------')
-
     free_blocker_move_tables(&tables)
+
     return blockers, moves

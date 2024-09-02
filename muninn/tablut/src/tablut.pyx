@@ -15,6 +15,7 @@ import random
 from typing import List
 from cpython cimport array
 import array
+from libc.math cimport exp
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -29,6 +30,7 @@ cdef struct Bitboard:
     uint64_t high
 
 cdef Bitboard EMPTY_BITBOARD = Bitboard(ZERO, ZERO)
+cdef Bitboard FULL_BITBOARD = Bitboard(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
 
 cdef Bitboard[81] BLOCKER_MASK = [
     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
@@ -130,6 +132,18 @@ cdef int[81] BLOCKER_BITS = [
     13, 12, 12, 12, 12, 12, 12, 12, 13,
     14, 13, 13, 13, 13, 13, 13, 13, 14]
 
+# Huge shout out to Apery for validating my efforts here - following their lead by increasize index size for squares 17 and 53
+cdef int[81] SHIFT_BITS = [
+    50, 51, 51, 51, 51, 51, 51, 51, 50,
+    51, 52, 52, 52, 52, 52, 52, 52, 50, # [17]: 51 -> 50
+    51, 52, 52, 52, 52, 52, 52, 52, 51,
+    51, 52, 52, 52, 52, 52, 52, 52, 51,
+    51, 52, 52, 52, 52, 52, 52, 52, 51,
+    51, 52, 52, 52, 52, 52, 52, 52, 50, # [53]: 51 -> 50
+    51, 52, 52, 52, 52, 52, 52, 52, 51,
+    51, 52, 52, 52, 52, 52, 52, 52, 51,
+    50, 51, 51, 51, 51, 51, 51, 51, 50]
+
 #------------------------------------------------------------------------------
 # Bit Manipulation Macros
 #------------------------------------------------------------------------------
@@ -170,6 +184,9 @@ cdef int count_bits(uint64_t b):
 cdef int count_bits_board(Bitboard board):
     return count_bits(board.low) + count_bits(board.high)
 
+cdef inline uint64_t bit_toggle(uint64_t number, int n):
+    return number ^ (1 << n)
+
 #------------------------------------------------------------------------------
 # Setting, Clearing, Printing Boards
 #------------------------------------------------------------------------------
@@ -192,6 +209,12 @@ cdef inline is_board_empty(Bitboard board):
     """
     return board.low == 0 and board.high == 0
 
+cdef inline is_board_full(Bitboard board):
+    """
+    Returns True if board has all bits set, else False
+    """
+    return board.low == 0xFFFFFFFFFFFFFFFF and board.high == 0xFFFFFFFFFFFFFFFF
+
 cdef inline same_board(Bitboard board_1, Bitboard board_2):
     """
     Returns True if two given boards have the same set bits, else False.
@@ -213,6 +236,9 @@ def print_board(Bitboard board):
     print(f"Bitboard: {board.low} {board.high}")
     print(f"Bitboard (hex): 0x{board.low:016X} 0x{board.high:016X}\n")
 
+def py_build_board(uint64_t low, uint64_t high):
+    cdef Bitboard board = Bitboard(low, high)
+    print_board(board)
 #------------------------------------------------------------------------------
 # Find Moves on the Fly
 #------------------------------------------------------------------------------
@@ -363,11 +389,11 @@ cdef uint64_t random_uint64_fewbits():
 #----------------------------------------
 # Magic Transformation
 #----------------------------------------
-cdef uint64_t transform(uint64_t key, uint64_t magic, int bits):
+cdef uint64_t transform(uint64_t key, uint64_t magic, int square):
     """
     Applies the magic multiplation and right shift, returns a 64-bit ULL index.
     """
-    return (key * magic) >> (64 - bits)
+    return (key * magic) >> SHIFT_BITS[square]
 
 #-------------------------------------------------
 # Build matching blocker subset and attack tables
@@ -385,7 +411,7 @@ cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):
     cdef uint64_t carry
 
     next.low = (subset.low - mask.low) & mask.low
-    carry = (subset.low - mask.low) > subset.low
+    carry = (subset.low - mask.low) > subset.low  # important for transversing board uint64s
     next.high = ((subset.high - carry) - mask.high) & mask.high
 
     return next
@@ -450,43 +476,50 @@ cdef uint64_t find_magic(int square):
     """
     cdef uint64_t mask = merge(get_blocker_mask(square))
     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
-    cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
-    cdef n_bits = BLOCKER_BITS[square]
-    cdef int k, i, index, fail, counter, max
-    cdef uint64_t magic
+    cdef size_t used_size = 1 << (64 - SHIFT_BITS[square])
+    cdef Bitboard* used = <Bitboard*>malloc(used_size * sizeof(Bitboard))
+    cdef uint64_t k, i, index, fail, counter, max_counter = 0
+    cdef uint64_t magic, best_magic = 0
     cdef uint64_t FAILED_MAGIC = ZERO
+    cdef uint64_t MAX_ITERATIONS = 100000000
 
     if used == NULL:
         free_blocker_move_tables(&tables)
         raise MemoryError("Failed to allocate memory for used array")
 
     try:
-        max = 0
-        for k in tqdm(range(1000000000), desc="Testing Magic", unit="magic"):
-            magic = random_uint64_fewbits()
-            if count_bits((mask * magic) & 0xFF00000000000000) < 6:
-                continue
+        with tqdm(total=MAX_ITERATIONS, desc=f"Finding Magic for Square {square}", unit="magic") as pbar:
+            for k in range(MAX_ITERATIONS):
+                magic = random_uint64_fewbits()
+                if count_bits((mask * magic) & 0xFFF0000000000000) < 6:
+                    pbar.update(1)
+                    continue
 
-            # Reset the used array
-            for i in range(tables.size):
-                used[i] = EMPTY_BITBOARD
+                # Reset the used array
+                for i in range(used_size):
+                    used[i] = FULL_BITBOARD
 
-            fail, counter = 0, 0
-            while fail == 0 and counter < tables.size:
-                index = transform(tables.blockers[counter], magic, n_bits)
-                if is_board_empty(used[index]):
-                    used[index] = tables.moves[counter]
-                elif not same_board(used[index], tables.moves[counter]):
-                    fail = 1
-                counter += 1
-                if counter > max:
-                    max = counter
+                fail, counter = 0, 0
+                while fail == 0 and counter < tables.size:
+                    index = transform(tables.blockers[counter], magic, square)
+                    if is_board_full(used[index]):
+                        used[index] = tables.moves[counter]
+                    elif not same_board(used[index], tables.moves[counter]):
+                        fail = 1
+                    counter += 1
 
+                if counter > max_counter:
+                    max_counter = counter
+                    best_magic = magic
 
-            if fail == 0:
-                return magic
+                if fail == 0:
+                    return magic
 
-        print(f"***Failed to find Magic for square {square}. Best Magic passed first {max} entries ({max/tables.size})***")
+                pbar.update(1)
+                if k % 100000 == 0:  # Update description
+                    pbar.set_description(f"Square {square}: Best {max_counter}/{tables.size}")
+
+        print(f"***Failed to find Magic for square {square}. Best Magic {best_magic:016X} passed first {max_counter} entries ({max_counter/tables.size:.2%})***")
         return FAILED_MAGIC
     finally:
         free(used)
@@ -494,13 +527,17 @@ cdef uint64_t find_magic(int square):
 
 def find_magics(squares=None):
     """
-    Python-accessible function to print magic numbers for specified board squares.
+    Python-accessible function to find and print magic numbers for specified board squares.
 
     :param squares: List or array of square indices to find magics for. If None, finds magics for all squares.
+    :param verbose: If True, prints detailed output. If False, only returns the results.
+    :param max_attempts: Maximum number of attempts to find a magic number for each square.
+    :return: Dictionary mapping square indices to their magic numbers.
     """
     cdef array.array square_array
-    cdef int square, i
+    cdef int square, i, attempt
     cdef uint64_t magic
+    cdef dict magic_dict = {}
 
     if squares is None:
         squares = range(81)
@@ -512,25 +549,137 @@ def find_magics(squares=None):
 
     print("****FINDING MAGICS****\n")
 
-    magics = []
-    #for i in tqdm(range(len(square_array)), desc="Finding magic numbers", unit="square"):
     for i in range(len(square_array)):
         square = square_array[i]
         magic = find_magic(square)
-        magics.append(f"0x{magic:016X}")
+        if magic != 0:
+            magic_dict[square] = magic
+        else:
+            magic_dict[square] = '***FAILED***'
 
     if len(square_array) == 81 and list(square_array) == list(range(81)):
         print("cdef uint64_t Magic[81] = {")
-        for i, magic in enumerate(magics):
-            if i % 4 == 0 and i != 0:
-                print()
-            print(f"{magic},", end=" ")
-        print("\n}")
+        for square in range(81):
+            print(f"0x{magic_dict.get(square, 0):016X},")
+        print("}")
     else:
-        for i in range(len(square_array)):
-            print(f"Square {square_array[i]} Magic: {magics[i]}")
-
+        for square in square_array:
+            print(f"Square {square} Magic: 0x{magic_dict.get(square, 0):016X}")
     print("\n****COMPLETE****")
+
+    return magic_dict
+
+#----------------------------------------
+cdef int collision_count(uint64_t magic, BlockerMoveTables* tables, Bitboard* used, int n_bits):
+    """
+    Returns number of collisions generated by trying to hash blocker - move pairs for a square. Used as cost function for simulated annealing.
+    """
+    cdef int collisions, counter
+
+    # Reset the used array
+    for i in range(tables.size):
+        used[i] = FULL_BITBOARD
+
+    collisions, counter = 0, 0
+    while counter < tables.size:
+        index = transform(tables.blockers[counter], magic, n_bits)
+        if is_board_full(used[index]): #TODO: I believe there is a flaw in this logic due to empty move sets that may have already been mapped
+            used[index] = tables.moves[counter]
+        elif not same_board(used[index], tables.moves[counter]):
+            collisions += 1
+        counter += 1
+
+    return collisions
+
+cdef uint64_t neighboring_magic(uint64_t magic):
+    cdef int index = random.randint(0, 63)
+    return bit_toggle(magic, index)
+
+cdef float acceptance_probability(int old_cost, int new_cost, float T):
+    if new_cost < old_cost:
+        return 1.0
+    return exp((old_cost - new_cost) / T)
+
+cdef simulated_annealing_magic(int square, uint64_t magic):
+    cdef int n_bits = BLOCKER_BITS[square]
+    cdef BlockerMoveTables tables  = build_blocker_move_tables(square)
+    cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+    if used == NULL:
+        raise MemoryError("Failed to allocate memory for used array")
+
+    cdef float T = 1.0
+    cdef float alpha = 0.99  # Cooling rate
+    cdef uint64_t best_magic = magic
+    cdef int old_cost = collision_count(magic, &tables, used, n_bits)
+    if old_cost == 0:
+        return magic
+
+    cdef int best_cost = old_cost
+    if best_cost < 28:
+        print(f"New Benchmark: Magic {best_magic:016X} with {best_cost} collisions.")
+    cdef uint64_t new_magic
+    cdef int new_cost
+    cdef float ap
+
+    try:
+        while T > 0.1:  # Termination condition
+            for i in range(1000):  # Number of iterations per temperature
+                new_magic = neighboring_magic(magic)
+                new_cost = collision_count(new_magic, &tables, used, n_bits)
+                if new_cost == 0:
+                    return new_magic
+                if new_cost < best_cost:
+                    best_cost = new_cost
+                    best_magic = new_magic
+                    if new_cost < 28:
+                        print(f"New Benchmark: Magic {best_magic:016X} with {best_cost} collisions.")
+                ap = acceptance_probability(old_cost, new_cost, T)
+                if ap > random.random():
+                    magic = new_magic
+                    old_cost = new_cost
+            T *= alpha
+    finally:
+        free(&used)
+        free_blocker_move_tables(&tables)
+    print(f"best was {best_cost} collisions")
+    return ZERO
+
+def simulated_annealing(int square, uint64_t starting_magic=0):
+    cdef uint64_t mask = merge(get_blocker_mask(square))
+    cdef uint64_t magic
+
+    print(f"Searching for a Square {square} Magic...")
+    for i in range(50):
+        if starting_magic == 0:
+            starting_magic = random_uint64_fewbits()
+            while True:
+                if count_bits((mask * starting_magic) & 0xFF00000000000000) >= 6:
+                    break
+                starting_magic = random_uint64_fewbits()
+        magic = simulated_annealing_magic(square, starting_magic)
+        if magic != ZERO:
+            print(f"Sqaure {square} Magic Found!!!\n{magic:016X}")
+            return
+    print("No Magic Found :(")
+
+def test_toggle():
+    cdef Bitboard b
+    cdef int n
+    set_start_position(&b)
+    print_board(b)
+    b.low = bit_toggle(b.low, 0)
+    print_board(b)
+    b.low = bit_toggle(b.low, 4)
+    print_board(b)
+    b.low = bit_toggle(b.low, 0)
+    print_board(b)
+    b.low = bit_toggle(b.low, 4)
+    print_board(b)
+    n = random.randint(0,63)
+    print(n)
+    b.low = bit_toggle(b.low, n)
+    print_board(b)
+
 
 #==============================================================================
 # Python Acessible Tests
@@ -563,6 +712,40 @@ def py_build_bm_tables(int square):
     cdef BlockerMoveTables tables = build_blocker_move_tables(square)
     blockers = [tables.blockers[i] for i in range(tables.size)]
     moves = [tables.moves[i] for i in range(tables.size)]
+    free_blocker_move_tables(&tables)
+
+    return blockers, moves
+
+def test_magic(int square, uint64_t magic):
+    cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+    cdef size_t used_size = 1 << (64 - SHIFT_BITS[square])
+    cdef Bitboard* used = <Bitboard*>malloc(used_size * sizeof(Bitboard))
+    blockers = [tables.blockers[i] for i in range(tables.size)]
+    moves = [tables.moves[i] for i in range(tables.size)]
+    if used == NULL:
+        raise MemoryError("Failed to allocate memory for used array")
+
+    # Reset the used array
+    for i in range(used_size):
+        used[i] = FULL_BITBOARD
+
+    unique, constructive, destructive = 0, 0, 0
+    for i in range(tables.size):
+        index = transform(tables.blockers[i], magic, square)
+        if is_board_full(used[index]):
+            used[index] = tables.moves[i]
+            print(f'move {i} successfully hashed to index {index}')
+            unique += 1
+        else:
+            if same_board(used[index], tables.moves[i]):
+                print(f"constructive collision for move {i} at index {index}")
+                constructive += 1
+            else:
+                print(f"!!!COLLISION FOR MOVE {i} AT INDEX {index}")
+                destructive += 1
+
+    print(f"unique: {unique} | constructive: {constructive} | destructive: {destructive}")
+    free(&used)
     free_blocker_move_tables(&tables)
 
     return blockers, moves

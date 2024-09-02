@@ -1,0 +1,172 @@
+# cython: language_level=3
+from libc.stdint cimport uint64_t
+from libc.stdio cimport printf
+
+
+# Constants
+cdef int BOARD_SIZE = 9
+cdef uint64_t RANK_MASK = 0x1FF  # 9 bits set (0b111111111)
+
+# Structure to represent the bitboard
+cdef struct Bitboard:
+    uint64_t low
+    uint64_t high
+
+# BIT MACROS
+cdef inline void set_bit(Bitboard* bitboard, int square):
+    if square < 62:
+        bitboard.low |= (1ULL << square)
+    else:
+        bitboard.high |= (1ULL << (square - 62))
+
+cdef inline int get_bit(Bitboard* bitboard, int square):
+    if square < 62:
+        return (bitboard.low & (1ULL << square)) != 0
+    else:
+        return (bitboard.high & (1ULL << (square - 62))) != 0
+
+# Lookup tables
+cdef Bitboard[512] RANK_ATTACKS
+cdef Bitboard[512] FILE_ATTACKS
+
+# Generate all rank move keys (based on possible row occupancies)
+cdef void generate_rank_keys():
+    pass
+
+
+# Function to generate attacks for a given occupancy
+cdef Bitboard generate_rank_attacks(uint64_t occupancy):
+    cdef Bitboard attacks
+    attacks.low = attacks.high = 0
+    cdef int i
+    for i in range(BOARD_SIZE):
+        if not (occupancy & (1 << i)):
+            attacks.low |= (1 << i)
+        elif occupancy & (1 << i):
+            if i > 0:
+                attacks.low |= (1 << (i - 1))
+            if i < BOARD_SIZE - 1:
+                attacks.low |= (1 << (i + 1))
+    return attacks
+
+# Initialize the lookup tables
+cdef void initialize_tables():
+    cdef uint64_t occupancy
+    cdef Bitboard attacks
+    cdef int i, j
+
+    # Initialize rank attacks
+    for occupancy in range(512):  # 2^9 possible occupancies
+        RANK_ATTACKS[occupancy] = generate_rank_attacks(occupancy)
+
+    # Initialize file attacks (similar to rank attacks, but we need to transpose)
+    for occupancy in range(512):
+        attacks = generate_rank_attacks(occupancy)
+        FILE_ATTACKS[occupancy].low = 0
+        FILE_ATTACKS[occupancy].high = 0
+        for i in range(BOARD_SIZE):
+            if attacks.low & (1 << i):
+                for j in range(BOARD_SIZE):
+                    if i * 9 + j < 62:
+                        FILE_ATTACKS[occupancy].low |= 1ULL << (i * 9 + j)
+                    else:
+                        FILE_ATTACKS[occupancy].high |= 1ULL << (i * 9 + j - 62)
+
+    print("Tables initialised...")
+
+# Function to get rank attacks
+cdef Bitboard get_rank_attacks(Bitboard occupied, int square):
+    cdef int rank = square // BOARD_SIZE
+    cdef uint64_t rank_occupancy = (occupied.low >> (rank * BOARD_SIZE)) & RANK_MASK
+    cdef Bitboard attacks = RANK_ATTACKS[rank_occupancy]
+    cdef Bitboard result
+    if rank < 6:
+        result.low = attacks.low << (rank * BOARD_SIZE)
+        result.high = 0
+    elif rank == 6:
+        result.low = attacks.low << 54
+        result.high = attacks.low >> 8
+    else:  # rank == 7 or 8
+        result.low = 0
+        result.high = attacks.low << (rank * BOARD_SIZE - 62)
+    return result
+
+# Function to get file attacks
+cdef Bitboard get_file_attacks(Bitboard occupied, int square):
+    cdef int file = square % BOARD_SIZE
+    cdef uint64_t file_occupancy = 0
+    cdef int i
+    for i in range(BOARD_SIZE):
+        if i * 9 + file < 62:
+            file_occupancy |= ((occupied.low >> (i * 9 + file)) & 1) << i
+        else:
+            file_occupancy |= ((occupied.high >> (i * 9 + file - 62)) & 1) << i
+    cdef Bitboard attacks = FILE_ATTACKS[file_occupancy]
+    cdef Bitboard result
+    result.low = 0
+    result.high = 0
+    for i in range(BOARD_SIZE):
+        if attacks.low & (1 << i):
+            if i * 9 + file < 62:
+                result.low |= 1ULL << (i * 9 + file)
+            else:
+                result.high |= 1ULL << (i * 9 + file - 62)
+    return result
+
+# Initialize tables
+initialize_tables()
+
+# Python-accessible wrapper functions
+def py_get_rank_attacks(uint64_t occ_low, uint64_t occ_high, int square):
+    cdef Bitboard occupied = Bitboard(occ_low, occ_high)
+    cdef Bitboard attacks = get_rank_attacks(occupied, square)
+    return attacks.low, attacks.high
+
+def py_get_file_attacks(uint64_t occ_low, uint64_t occ_high, int square):
+    cdef Bitboard occupied = Bitboard(occ_low, occ_high)
+    cdef Bitboard attacks = get_file_attacks(occupied, square)
+    return attacks.low, attacks.high
+
+# SET STARTING OCCUPANCIES
+cdef Bitboard start_pos():
+    cdef Bitboard bitboard
+    bitboard.high = bitboard.low = 0ULL
+
+    #for i in [3, 4, 5, 13, 22, 27, 31, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 49, 53, 58, 67, 75, 76, 77]:  # This will set bits in the first rank
+    for i in [0]:
+        set_bit(&bitboard, i)
+
+    return bitboard
+
+# Helper function to print bitboards
+def print_bitboard(uint64_t low, uint64_t high):
+    for rank in range(8, -1, -1):
+        print(f"{rank+1} ", end="")
+        for file in range(9):
+            sq = rank * 9 + file
+            if sq < 62:
+                print("1 " if low & (1 << sq) else ". ", end="")
+            else:
+                print("1 " if high & (1 << (sq - 62)) else ". ", end="")
+        print()
+    print("  a b c d e f g h i")
+    printf("Bitboard: %llu %llu\n\n", low, high)
+
+# Test function
+def test_attacks():
+    cdef Bitboard bitboard
+
+    bitboard = start_pos()
+
+    print("Occupied squares:")
+    print_bitboard(bitboard.low, bitboard.high)
+
+    # Test rank attacks
+    rank_low, rank_high = py_get_rank_attacks(bitboard.low, bitboard.high, 40)  # e5
+    print("\nRank attacks from e5:")
+    print_bitboard(rank_low, rank_high)
+
+    # Test file attacks
+    file_low, file_high = py_get_file_attacks(bitboard.low, bitboard.high, 40)  # e5
+    print("\nFile attacks from e5:")
+    print_bitboard(file_low, file_high)

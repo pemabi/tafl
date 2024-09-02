@@ -1,142 +1,90 @@
-cdef class TablutBoard:
-    cdef unsigned long long white_lower64, black_lower64, king_lower64, throne_lower64
-    cdef unsigned int white_upper17, black_upper17, king_upper17, throne_upper17
+# cython: language_level=3
+from libc.stdint cimport uint64_t, uint8_t, uint16_t
+from libc.stdio cimport printf
 
-    def __init__(self):
-        self.white_lower64 = self.black_lower64 = self.king_lower64 = self.throne_lower64 = 0
-        self.white_upper17 = self.black_upper17 = self.king_upper17 = self.throne_upper17 = 0
-        self.initialize_board()
+cdef struct Bitboard:
+    uint64_t low
+    uint64_t high
 
-    cdef void initialize_board(self):
-        # Set up the initial Tablut board state
-        self.set_bit(4, 4, 'throne')
-        self.set_bit(4, 4, 'king')
+# MASKS
+# Constants for the 9x9 board
+cdef uint64_t RANK_MASK = 0x1FFULL  # 9 bits set (0b111111111)
 
-        # Set white pieces
-        for i in [2, 3, 5, 6]:
-            self.set_bit(4, i, 'white')
-            self.set_bit(i, 4, 'white')
+cdef Bitboard shift_right(Bitboard bb, int shift):
+    cdef Bitboard result
+    if shift == 0:
+        return bb
+    if shift < 62:
+        result.high = (bb.high >> shift) | (bb.low << (62 - shift))
+        result.low = bb.low >> shift
+    else:
+        result.high = bb.low >> (shift - 62)
+        result.low = 0
+    return result
 
-        # Set black pieces
-        black_positions = [
-            (0, 3), (0, 4), (0, 5), (1, 4),
-            (3, 0), (4, 0), (5, 0), (4, 1),
-            (8, 3), (8, 4), (8, 5), (7, 4),
-            (3, 8), (4, 8), (5, 8), (4, 7)
-        ]
-        for row, col in black_positions:
-            self.set_bit(row, col, 'black')
+cdef Bitboard shift_left(Bitboard bb, int shift):
+    cdef Bitboard result
+    if shift == 0:
+        return bb
+    if shift < 62:
+        result.low = (bb.low << shift) | (bb.high >> (62 - shift))
+        result.high = bb.high << shift
+    else:
+        result.low = bb.high << (shift - 62)
+        result.high = 0
+    return result
 
-    cdef void set_bit(self, int row, int col, str piece_type):
-        cdef int bit_position = row * 9 + col
-        cdef unsigned long long mask_lower
-        cdef unsigned int mask_upper
+cdef Bitboard get_rank_occupants(Bitboard occupied, int square):
+    cdef int rank = square // 9
+    cdef int shift = rank * 9
+    cdef Bitboard shifted = shift_right(occupied, shift)
+    cdef uint64_t attacks = RANK_MASK & shifted.low
+    cdef Bitboard result = shift_left(Bitboard(attacks, 0), shift)
+    return result
 
-        if bit_position < 64:
-            mask_lower = 1ULL << bit_position
-            mask_upper = 0
-        else:
-            mask_lower = 0
-            mask_upper = 1 << (bit_position - 64)
+# BIT MACROS
+cdef inline void set_bit(Bitboard* bitboard, int square):
+    if square < 62:
+        bitboard.low |= (1ULL << square)
+    else:
+        bitboard.high |= (1ULL << (square - 62))
 
-        # Clear the position on all bitboards
-        self.white_lower64 &= ~mask_lower
-        self.black_lower64 &= ~mask_lower
-        self.king_lower64 &= ~mask_lower
-        self.throne_lower64 &= ~mask_lower
-        self.white_upper17 &= ~mask_upper
-        self.black_upper17 &= ~mask_upper
-        self.king_upper17 &= ~mask_upper
-        self.throne_upper17 &= ~mask_upper
+cdef inline int get_bit(Bitboard* bitboard, int square):
+    if square < 62:
+        return (bitboard.low & (1ULL << square)) != 0
+    else:
+        return (bitboard.high & (1ULL << (square - 62))) != 0
 
-        # Set the piece on the appropriate bitboard
-        if piece_type == 'white':
-            self.white_lower64 |= mask_lower
-            self.white_upper17 |= mask_upper
-        elif piece_type == 'black':
-            self.black_lower64 |= mask_lower
-            self.black_upper17 |= mask_upper
-        elif piece_type == 'king':
-            self.king_lower64 |= mask_lower
-            self.king_upper17 |= mask_upper
-        elif piece_type == 'throne':
-            self.throne_lower64 |= mask_lower
-            self.throne_upper17 |= mask_upper
+# SET STARTING OCCUPANCIES
+cdef Bitboard start_pos():
+    cdef Bitboard bitboard
+    bitboard.high = bitboard.low = 0ULL
 
-    cdef str get_bit(self, int row, int col):
-        cdef int bit_position = row * 9 + col
-        cdef unsigned long long mask_lower
-        cdef unsigned int mask_upper
+    for i in [3, 4, 5, 13, 22, 27, 31, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 49, 53, 58, 67, 75, 76, 77]:  # This will set bits in the first rank
+        set_bit(&bitboard, i)
 
-        if bit_position < 64:
-            mask_lower = 1ULL << bit_position
-            if self.white_lower64 & mask_lower:
-                return 'white'
-            elif self.black_lower64 & mask_lower:
-                return 'black'
-            elif self.king_lower64 & mask_lower:
-                return 'king'
-            elif self.throne_lower64 & mask_lower:
-                return 'throne'
-        else:
-            mask_upper = 1 << (bit_position - 64)
-            if self.white_upper17 & mask_upper:
-                return 'white'
-            elif self.black_upper17 & mask_upper:
-                return 'black'
-            elif self.king_upper17 & mask_upper:
-                return 'king'
-            elif self.throne_upper17 & mask_upper:
-                return 'throne'
+    return bitboard
 
-        return 'empty'
-
-    cdef void pop_bit(self, int row, int col, str piece_type):
-        cdef int bit_position = row * 9 + col
-        cdef unsigned long long mask_lower
-        cdef unsigned int mask_upper
-
-        # create appropriate mask
-        if bit_position < 64:
-            mask_lower = 1ULL << bit_position
-            mask_upper = 0
-        else:
-            mask_lower = 0
-            mask_upper = 1 << (bit_position - 64)
-
-        # Remove the piece on the appropriate bitboard
-        if piece_type == 'white':
-            self.white_lower64 |= mask_lower
-            self.white_upper17 |= mask_upper
-        elif piece_type == 'black':
-            self.black_lower64 |= mask_lower
-            self.black_upper17 |= mask_upper
-        elif piece_type == 'king':
-            self.king_lower64 |= mask_lower
-            self.king_upper17 |= mask_upper
-        elif piece_type == 'throne':
-            self.throne_lower64 |= mask_lower
-            self.throne_upper17 |= mask_upper
+# PRINT BITBOARD
+cdef void print_bitboard(Bitboard* bitboard):
+    printf("\n")
+    cdef int rank, file, square
+    for rank in range(9):
+        printf("  %d ", 9 - rank)
+        for file in range(9):
+            square = rank * 9 + file
+            printf(" %d", get_bit(bitboard, square))
+        printf("\n")
+    printf("\n     a b c d e f g h i\n\n")
+    printf("     Bitboard: %llu %llu\n\n", bitboard.low, bitboard.high)
 
 
+def main():
+    cdef Bitboard bitboard
+    cdef Bitboard occupants
 
-    def draw_board(self):
-        board_str = ""
-        for row in range(9):
-            for col in range(9):
-                piece = self.get_bit(row, col)
-                if piece == 'white':
-                    board_str += 'W '
-                elif piece == 'black':
-                    board_str += 'B '
-                elif piece == 'king':
-                    board_str += 'K '
-                elif piece == 'throne':
-                    board_str += 'T '
-                else:
-                    board_str += '. '
-            board_str += '\n'
-        return board_str
+    bitboard = start_pos()
+    print_bitboard(&bitboard)
 
-    def print_board(self):
-        print(self.draw_board())
+    moves = get_rank_occupants(bitboard, 17)
+    print_bitboard(&occupants)

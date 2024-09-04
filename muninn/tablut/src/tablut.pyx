@@ -1,8 +1,8 @@
 # cython: language_level=3
-#TODO: use all the constants I've defined
 #==============================================================================
 # Imports and Type Declarations
 #==============================================================================
+# TODO: refactor magics and Bitboard Masks to 3x3s. Possible create Blocker Masks dynamically at start
 
 from libc.stdint cimport uint64_t
 from cpython.dict cimport PyDict_SetItem, PyDict_GetItem
@@ -150,7 +150,7 @@ cdef int[81] SHIFT_BITS = [  # represents bits we shift when calculating move in
     51, 52, 52, 52, 52, 52, 52, 52, 51,
     50, 51, 51, 51, 51, 51, 51, 51, 50]
 
-cdef uint64_t[81] Magic = [
+cdef uint64_t[81] MAGIC = [
     0x0040001141090900,
     0x10A0000A00044080,
     0x04C004000080A080,
@@ -234,7 +234,7 @@ cdef uint64_t[81] Magic = [
     0xA000200001224282]
 
 def get_magic_list():
-    return [x for x in Magic]
+    return [x for x in MAGIC]
 
 #==============================================================================
 # Bit Manipulation Macros
@@ -714,7 +714,7 @@ def find_magics(squares=None):
     return magic_dict
 
 #----------------------------------------------
-# Simulated Annealing for Magic Search
+# Simulated Annealing for Magic Search - FOR POSTERITY
 #----------------------------------------------
 cdef int collision_count(uint64_t magic, BlockerMoveTables* tables, Bitboard* used, int n_bits):
     """
@@ -827,6 +827,9 @@ def simulated_annealing(int square, uint64_t user_magic=ZERO):
 # Move Tables
 #==============================================================================
 
+cdef inline get_hash_value(uint64_t blocker_key, int square):
+    return (blocker_key * MAGIC[square]) >> SHIFT_BITS[square]
+
 cdef struct MoveTable:
     Bitboard* moves
     int size
@@ -851,46 +854,39 @@ cdef class MoveTables:
             free(self.tables[square].moves)
 
         self.tables[square].moves = <Bitboard*>malloc(size * sizeof(Bitboard))
+        if self.tables[square].moves == NULL:
+            raise MemoryError("Failed to allocate memory for used array")
         self.tables[square].size = size
 
-        cdef magic = Magic[square]
         cdef int i
         for i in range(blocker_moves.size):
-            index = transform(blocker_moves.blockers[i], magic, square)
-            self.tables[square].moves[index] = blocker_moves[i]
+            index = get_hash_value(blocker_moves.blockers[i], square)
+            self.tables[square].moves[index] = blocker_moves.moves[i]
 
-    cdef uint64_t get_move(self, int square, Bitboard occupancy):
-        cdef Bitboard blockers = get_blockers(occupancy, square)
-        cdef uint64_t blocker_key = merge(blockers)
-        cdef int index = transform(blocker_key, Magic[square], square)
-        if 0 <= square < 81 and 0 <= index < self.tables[square].size:
-            return self.tables[square].moves[index]
-        return 0  # or some error value
+    cdef Bitboard get_move(self, int square, Bitboard occupancy):
+        cdef uint64_t blocker_key = merge(get_blockers(occupancy, square))
+        cdef int index = get_hash_value(blocker_key, square)
+        return self.tables[square].moves[index]
 
-    def py_get_move(self, int square, uint64_t blockers):
-        return self.get_move(square, index)
+    def py_get_move(self, int square, Bitboard occupancy):
+        return self.get_move(square, occupancy)
 
 cdef MoveTables build_move_tables():
     cdef MoveTables move_tables = MoveTables()
     cdef BlockerMoveTables blocker_moves
     cdef int i, size
-    for i in tqdm(range(81)):
-        tables = build_blocker_move_tables(i)
+    for i in tqdm(range(81), desc="Building Move Tables..."):
+        blocker_moves = build_blocker_move_tables(i)
         size = 1 << (64 - SHIFT_BITS[i])
         move_tables.set_table(i, &blocker_moves, size)
+        free_blocker_move_tables(&blocker_moves)
 
-        free_blocker_move_tables(&tables)
-
-    print('Move Tables Intialised.')
+    print('Move Tables Initialised.')
     return move_tables
 
-def get_move_tables():
-    cdef Bitboard board = set_start_position()
+def py_build_move_tables():
     cdef MoveTables Moves = build_move_tables()
-
-    print_board(board)
-    cdef blocker_key = merge(board)
-    Moves.get_move()
+    return Moves
 
 
 #==============================================================================

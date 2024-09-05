@@ -32,6 +32,8 @@ cdef struct Bitboard:
 cdef Bitboard EMPTY_BITBOARD = Bitboard(ZERO, ZERO)
 cdef Bitboard FULL_BITBOARD = Bitboard(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
 
+ctypedef Bitboard (*bb_func)(Bitboard, int)
+
 cdef Bitboard[81] BLOCKER_MASK = [  # TODO: potentially generate this 1x at runtime - so cheap and just takes up space
     Bitboard(low = 0x00402010080402FE, high = 0x0000000000000001),
     Bitboard(low = 0x00804020100804FC, high = 0x0000000000000002),
@@ -151,90 +153,172 @@ cdef int[81] SHIFT_BITS = [  # represents bits we shift when calculating move in
     50, 51, 51, 51, 51, 51, 51, 51, 50]
 
 cdef uint64_t[81] MAGIC = [
-    0x0040001141090900,
-    0x10A0000A00044080,
-    0x04C004000080A080,
-    0x00800104102744C0,
-    0x008000860A122020,
-    0x4380004500200410,
-    0x4280010010040908,
-    0x0040004808080044,
-    0x804000088800889A,
-    0x0010200001020001,
-    0x006110000D000880,
-    0x9000280100400080,
-    0x9102200200004001,
-    0x2800900080020008,
-    0x0000A00080001001,
-    0x0200100800100002,
-    0x1500601000080004,
-    0x0100440022084012,  # square 17
-    0x8010145000040900,
-    0x0430020800121040,
-    0x4444106001010006,
-    0x0C04001000440040,
-    0x14C400200100220A,
-    0x2682001000200265,
-    0x00800C2000420808,
-    0x3440041002080004,
-    0x41C0001000020082,
-    0xA010205228000300,
-    0x0020040024000080,
-    0x0591042820004801,
-    0x0004002088008001,
-    0x021400085000A042,
-    0x3400004004020008,
-    0x10800900B0008808,
-    0x0400400008040004,
-    0x094000C828000082,
-    0x121A100002440001,
-    0x0083100042080041,
-    0x1000080080010020,
-    0x82C0020008440040,
-    0xA002001000240020,
-    0x0102001000140008,
-    0x0200100010020004,
-    0x0040042000340004,
-    0x0040000504040022,
-    0x0020001042009200,
-    0x4020080001004900,
-    0x1000080100400080,
-    0x4C00040000800201,
-    0x2020081010008004,
-    0x0500008000400201,
-    0x0100010040000402,
-    0x2000800010000601,
-    0x001001010000800A,  # square 53
-    0x0020007000090045,
-    0x4000A0B841013402,
-    0x210830010A001402,
-    0x0944030420028104,
-    0x000400100840005B,
-    0x2002001000200005,
-    0x00800080004048D2,
-    0x13220440C8184028,
-    0x4028998110120204,
-    0x034000840C000C69,
-    0x00A0040004000080,
-    0x0080028801081080,
-    0x4040010100040040,
-    0x0240010000240020,
-    0x4140010000901001,
-    0x30800046C0002102,
-    0x00C0004000180009,
-    0x204000084244000A,
-    0x0004200001252900,
-    0x0504900002000840,
-    0x000A200101000280,
-    0x0009200085000060,
-    0x81012000A44000A0,
-    0x840A400100101110,
-    0x0681200210200024,
-    0x8006200210000904,
-    0xA000200001224282]
+    0x0040001141090900, 0x10A0000A00044080, 0x04C004000080A080,
+    0x00800104102744C0, 0x008000860A122020, 0x4380004500200410,
+    0x4280010010040908, 0x0040004808080044, 0x804000088800889A,
+    0x0010200001020001, 0x006110000D000880, 0x9000280100400080,
+    0x9102200200004001, 0x2800900080020008, 0x0000A00080001001,
+    0x0200100800100002, 0x1500601000080004, 0x0100440022084012,  # square 17
+    0x8010145000040900, 0x0430020800121040, 0x4444106001010006,
+    0x0C04001000440040, 0x14C400200100220A, 0x2682001000200265,
+    0x00800C2000420808, 0x3440041002080004, 0x41C0001000020082,
+    0xA010205228000300, 0x0020040024000080, 0x0591042820004801,
+    0x0004002088008001, 0x021400085000A042, 0x3400004004020008,
+    0x10800900B0008808, 0x0400400008040004, 0x094000C828000082,
+    0x121A100002440001, 0x0083100042080041, 0x1000080080010020,
+    0x82C0020008440040, 0xA002001000240020, 0x0102001000140008,
+    0x0200100010020004, 0x0040042000340004, 0x0040000504040022,
+    0x0020001042009200, 0x4020080001004900, 0x1000080100400080,
+    0x4C00040000800201, 0x2020081010008004, 0x0500008000400201,
+    0x0100010040000402, 0x2000800010000601, 0x001001010000800A,  # square 53
+    0x0020007000090045, 0x4000A0B841013402, 0x210830010A001402,
+    0x0944030420028104, 0x000400100840005B, 0x2002001000200005,
+    0x00800080004048D2, 0x13220440C8184028, 0x4028998110120204,
+    0x034000840C000C69, 0x00A0040004000080, 0x0080028801081080,
+    0x4040010100040040, 0x0240010000240020, 0x4140010000901001,
+    0x30800046C0002102, 0x00C0004000180009, 0x204000084244000A,
+    0x0004200001252900, 0x0504900002000840, 0x000A200101000280,
+    0x0009200085000060, 0x81012000A44000A0, 0x840A400100101110,
+    0x0681200210200024, 0x8006200210000904, 0xA000200001224282]
 
 def get_magic_list():
     return [x for x in MAGIC]
+
+cdef Bitboard[81] ATTACK_MASKS = [
+Bitboard(low = 0x0000000000040004, high = 0x0000000000000000),
+Bitboard(low = 0x0000000000080008, high = 0x0000000000000000),
+Bitboard(low = 0x0000000000100011, high = 0x0000000000000000),
+Bitboard(low = 0x0000000000200022, high = 0x0000000000000000),
+Bitboard(low = 0x0000000000400044, high = 0x0000000000000000),
+Bitboard(low = 0x0000000000800088, high = 0x0000000000000000),
+Bitboard(low = 0x0000000001000110, high = 0x0000000000000000),
+Bitboard(low = 0x0000000002000020, high = 0x0000000000000000),
+Bitboard(low = 0x0000000004000040, high = 0x0000000000000000),
+Bitboard(low = 0x0000000008000800, high = 0x0000000000000000),
+Bitboard(low = 0x0000000010001000, high = 0x0000000000000000),
+Bitboard(low = 0x0000000020002200, high = 0x0000000000000000),
+Bitboard(low = 0x0000000040004400, high = 0x0000000000000000),
+Bitboard(low = 0x0000000080008800, high = 0x0000000000000000),
+Bitboard(low = 0x0000000100011000, high = 0x0000000000000000),
+Bitboard(low = 0x0000000200022000, high = 0x0000000000000000),
+Bitboard(low = 0x0000000400004000, high = 0x0000000000000000),
+Bitboard(low = 0x0000000800008000, high = 0x0000000000000000),
+Bitboard(low = 0x0000001000100001, high = 0x0000000000000000),
+Bitboard(low = 0x0000002000200002, high = 0x0000000000000000),
+Bitboard(low = 0x0000004000440004, high = 0x0000000000000000),
+Bitboard(low = 0x0000008000880008, high = 0x0000000000000000),
+Bitboard(low = 0x0000010001100010, high = 0x0000000000000000),
+Bitboard(low = 0x0000020002200020, high = 0x0000000000000000),
+Bitboard(low = 0x0000040004400040, high = 0x0000000000000000),
+Bitboard(low = 0x0000080000800080, high = 0x0000000000000000),
+Bitboard(low = 0x0000100001000100, high = 0x0000000000000000),
+Bitboard(low = 0x0000200020000200, high = 0x0000000000000000),
+Bitboard(low = 0x0000400040000400, high = 0x0000000000000000),
+Bitboard(low = 0x0000800088000800, high = 0x0000000000000000),
+Bitboard(low = 0x0001000110001000, high = 0x0000000000000000),
+Bitboard(low = 0x0002000220002000, high = 0x0000000000000000),
+Bitboard(low = 0x0004000440004000, high = 0x0000000000000000),
+Bitboard(low = 0x0008000880008000, high = 0x0000000000000000),
+Bitboard(low = 0x0010000100010000, high = 0x0000000000000000),
+Bitboard(low = 0x0020000200020000, high = 0x0000000000000000),
+Bitboard(low = 0x0040004000040000, high = 0x0000000000000000),
+Bitboard(low = 0x0080008000080000, high = 0x0000000000000000),
+Bitboard(low = 0x0100011000100000, high = 0x0000000000000000),
+Bitboard(low = 0x0200022000200000, high = 0x0000000000000000),
+Bitboard(low = 0x0400044000400000, high = 0x0000000000000000),
+Bitboard(low = 0x0800088000800000, high = 0x0000000000000000),
+Bitboard(low = 0x1000110001000000, high = 0x0000000000000000),
+Bitboard(low = 0x2000020002000000, high = 0x0000000000000000),
+Bitboard(low = 0x4000040004000000, high = 0x0000000000000000),
+Bitboard(low = 0x0000800008000000, high = 0x0000000000000001),
+Bitboard(low = 0x0001000010000000, high = 0x0000000000000002),
+Bitboard(low = 0x0002200020000000, high = 0x0000000000000004),
+Bitboard(low = 0x0004400040000000, high = 0x0000000000000008),
+Bitboard(low = 0x0008800080000000, high = 0x0000000000000010),
+Bitboard(low = 0x0011000100000000, high = 0x0000000000000020),
+Bitboard(low = 0x0022000200000000, high = 0x0000000000000040),
+Bitboard(low = 0x0004000400000000, high = 0x0000000000000080),
+Bitboard(low = 0x0008000800000000, high = 0x0000000000000100),
+Bitboard(low = 0x0100001000000000, high = 0x0000000000000200),
+Bitboard(low = 0x0200002000000000, high = 0x0000000000000400),
+Bitboard(low = 0x0440004000000000, high = 0x0000000000000800),
+Bitboard(low = 0x0880008000000000, high = 0x0000000000001000),
+Bitboard(low = 0x1100010000000000, high = 0x0000000000002000),
+Bitboard(low = 0x2200020000000000, high = 0x0000000000004000),
+Bitboard(low = 0x4400040000000000, high = 0x0000000000008000),
+Bitboard(low = 0x0800080000000000, high = 0x0000000000010000),
+Bitboard(low = 0x1000100000000000, high = 0x0000000000020000),
+Bitboard(low = 0x0000200000000000, high = 0x0000000000000004),
+Bitboard(low = 0x0000400000000000, high = 0x0000000000000008),
+Bitboard(low = 0x0000800000000000, high = 0x0000000000000011),
+Bitboard(low = 0x0001000000000000, high = 0x0000000000000022),
+Bitboard(low = 0x0002000000000000, high = 0x0000000000000044),
+Bitboard(low = 0x0004000000000000, high = 0x0000000000000088),
+Bitboard(low = 0x0008000000000000, high = 0x0000000000000110),
+Bitboard(low = 0x0010000000000000, high = 0x0000000000000020),
+Bitboard(low = 0x0020000000000000, high = 0x0000000000000040),
+Bitboard(low = 0x0040000000000000, high = 0x0000000000000800),
+Bitboard(low = 0x0080000000000000, high = 0x0000000000001000),
+Bitboard(low = 0x0100000000000000, high = 0x0000000000002200),
+Bitboard(low = 0x0200000000000000, high = 0x0000000000004400),
+Bitboard(low = 0x0400000000000000, high = 0x0000000000008800),
+Bitboard(low = 0x0800000000000000, high = 0x0000000000011000),
+Bitboard(low = 0x1000000000000000, high = 0x0000000000022000),
+Bitboard(low = 0x2000000000000000, high = 0x0000000000004000),
+Bitboard(low = 0x4000000000000000, high = 0x0000000000008000)]
+
+cdef int[81] ATTACK_BITS = [
+    2, 2, 3, 3, 3, 3, 3, 2, 2,
+    2, 2, 3, 3, 3, 3, 3, 2, 2,
+    3, 3, 4, 4, 4, 4, 4, 3, 3,
+    3, 3, 4, 4, 4, 4, 4, 3, 3,
+    3, 3, 4, 4, 4, 4, 4, 3, 3,
+    3, 3, 4, 4, 4, 4, 4, 3, 3,
+    3, 3, 4, 4, 4, 4, 4, 3, 3,
+    2, 2, 3, 3, 3, 3, 3, 2, 2,
+    2, 2, 3, 3, 3, 3, 3, 2, 2
+]
+
+cdef int[81] ATTACK_SHIFT_BITS = [
+    62, 62, 61, 61, 61, 61, 61, 62, 62,
+    62, 62, 61, 61, 61, 61, 61, 62, 62,
+    61, 61, 60, 60, 60, 60, 60, 61, 61,
+    61, 61, 60, 60, 60, 60, 60, 61, 61,
+    61, 61, 60, 60, 60, 60, 60, 61, 61,
+    61, 61, 60, 60, 60, 60, 60, 61, 61,
+    61, 61, 60, 60, 60, 60, 60, 61, 61,
+    62, 62, 61, 61, 61, 61, 61, 62, 62,
+    62, 62, 61, 61, 61, 61, 61, 62, 62
+]
+
+cdef uint64_t[81] ATTACK_MAGICS = [
+    0x104820A102002160, 0x10A00D0880000001, 0x4201482800020000,
+    0x2405417000002014, 0x0960020000800000, 0x4848030050058206,
+    0x0340808058394004, 0x4D2130A401002801, 0x11D0002050002060,
+    0x03308C2820801811, 0x0004071880000000, 0x0821020440002004,
+    0x040A300112900900, 0x0410402090061200, 0x0042500C88004002,
+    0x2004680030004200, 0x5082188010520000, 0x0C09306428200003,
+    0x2010040C880A1200, 0x2100042061128010, 0x10444A00004200C0,
+    0x0424090000201020, 0x0611018010408002, 0x0221409000428821,
+    0x02001148C0100000, 0x008C005000102000, 0x0848028201024000,
+    0x2044030A90010000, 0x600804824041082E, 0x6008003020004820,
+    0x09020234190080A0, 0x0022040C08805000, 0x0020404120000800,
+    0x0000201048049008, 0x0500404898403210, 0x0005400E18002202,
+    0x0400E08800821140, 0x8400041A20800120, 0x8800080807232041,
+    0x4220441011080021, 0x0000008022040250, 0x0001030021246009,
+    0x000008100C28088C, 0x01000C4060208001, 0x0401220E09600C07,
+    0x400020C520010081, 0x200004080C122100, 0x2040020108C20800,
+    0x02000006020C9188, 0x09020208801104A0, 0x1401010144011200,
+    0x004A000014404200, 0x004080A130642000, 0x022BB34010800820,
+    0x001C00A008000841, 0x908C0060040C0826, 0x011010C10100A984,
+    0x8008000100208048, 0x01008500808400A4, 0x50010824D4081841,
+    0x01C0400C00442112, 0x1001218401084810, 0x0008414044048002,
+    0x161000800804048A, 0x4B10005008020134, 0x2404028020030100,
+    0x421000020040A110, 0x49201A0504004002, 0x690210000005A941,
+    0x0820800AE3040A00, 0x5409140408110640, 0x2284C28042003262,
+    0x0211330000000910, 0x00080A0808002094, 0x0012028A22000088,
+    0x4009244408020041, 0x000900A10000010A, 0x0104900200444004,
+    0x4801248000000009, 0x400529800C000004, 0x020B1D0205680001]
 
 #==============================================================================
 # Bit Manipulation Macros
@@ -373,15 +457,17 @@ def print_board(Bitboard board):
     print(f"Bitboard: low: {board.low} | high: {board.high}")
     print(f"Bitboard (hex): low: 0x{board.low:016X} | high: 0x{board.high:016X}\n")
 
-def py_build_board(uint64_t low, uint64_t high):
+def py_build_board(uint64_t low=ZERO, uint64_t high=ZERO, bint verbose=True):
     """
     Python accessible function that builds a board based on two uint64s.
     """
     cdef Bitboard board = Bitboard(low, high)
-    print_board(board)
+    if verbose:
+        print_board(board)
+    return board
 
 #----------------------------------------------
-# Find Moves on the Fly
+# On the Fly ops
 #----------------------------------------------
 cdef Bitboard find_moves_otf(Bitboard board, int square):
     """
@@ -423,9 +509,25 @@ cdef Bitboard find_moves_otf(Bitboard board, int square):
 
     return moves
 
+cdef Bitboard find_attacked_squares_otf(Bitboard attackers, int square): # TODO: uncomfortable with the naming overlap with the Tablut side name, but doesnt really matter
+    cdef Bitboard attacked_squares = EMPTY_BITBOARD
+    cdef int rank = square // 9
+
+    if 0 <= square + 18 <= 80 and is_bit_set(&attackers, square + 18):
+        set_bit(&attacked_squares, square + 9)
+    if (0 <= square + 2 <= 80) and ((square + 2) // 9 == rank) and is_bit_set(&attackers, square + 2):
+        set_bit(&attacked_squares, square + 1)
+    if 0 <= square - 18 <= 80 and is_bit_set(&attackers, square - 18):
+        set_bit(&attacked_squares, square - 9)
+    if 0 <= square - 2 <= 80 and ((square - 2) // 9 == rank) and is_bit_set(&attackers, square - 2):
+        set_bit(&attacked_squares, square - 1)
+
+    return attacked_squares
+
 #----------------------------------------------
 # Leftover Logic for Generating Blocker Mask, Blocker Bits Constants
 #----------------------------------------------
+
 cdef Bitboard build_blocker_masks(Bitboard board, int square):
     """
     Builds a mask showing the full set of blocker squares for a given Bitboard and square. Returns Bitboard with all blockers.
@@ -487,28 +589,63 @@ cdef void print_masks():
       blockers = build_blocker_masks(bitboard, i)
       print(f"Bitboard(low = 0x{blockers.low:016X}, high = 0x{blockers.high:016X}),")
 
-cdef void print_relevant_bits():
+cdef void print_relevant_bits(str mask):
     """
-    Used to print BLOCKER_BITS array.
+    Used to print BLOCKER_BITS / ATTACK_BITS array. Use keyword 'blocker' or 'attack'
     """
     cdef int i
-    cdef Bitboard board = Bitboard(0,0)
+    cdef Bitboard board = EMPTY_BITBOARD
     cdef int count
 
     for i in range(81):
         set_bit(&board, i)
-        count = count_bits_board(build_blocker_masks(board, i))
+        if mask == 'blocker':
+            count = count_bits_board(BLOCKER_MASK[i])
+        elif mask == 'attack':
+            count = count_bits_board(ATTACK_MASKS[i])
+        else:
+            print('INVALID ARG print_relevant_bits. Use "attack" or "blocker"')
+            return
         clear_bit(&board, i)
         print(f'{count}, ', end='')
         if (i + 1) % 9 == 0:
             print()
 
+#----------------------------------------------
+# Attack Masks
+#----------------------------------------------
+cdef Bitboard build_attack_masks(int square):
+    cdef Bitboard attack_mask = EMPTY_BITBOARD
+    cdef int rank = square // 9
+
+    if 0 <= square + 18 <= 80:
+        set_bit(&attack_mask, square + 18)
+    if (0 <= square + 2 <= 80) and ((square + 2) // 9 == rank):
+        set_bit(&attack_mask, square + 2)
+    if 0 <= square - 18 <= 80:
+        set_bit(&attack_mask, square - 18)
+    if 0 <= square - 2 <= 80 and ((square - 2) // 9 == rank):
+        set_bit(&attack_mask, square - 2)
+
+    return attack_mask
+
+def print_attack_masks():
+    print("cdef Bitboard[81] ATTACK_MASKS = [")
+    for i in range(81):
+      attack_mask = build_attack_masks(i)
+      print(f"Bitboard(low = 0x{attack_mask.low:016X}, high = 0x{attack_mask.high:016X}),")
+    print("]")
+
 #==============================================================================
 # Finding Magic Numbers
 #==============================================================================
-#----------------------------------------------
-# Random uint64 Generation
-#----------------------------------------------
+
+cdef inline get_hash_value(uint64_t blocker_key, uint64_t magic, int shift_bits):
+    """
+    Applies the magic multiplation and right shift, returns a 64-bit ULL index.
+    """
+    return (blocker_key * magic) >> shift_bits
+
 cdef uint64_t random_u64():
     """
     Returns a random 64-bit ULL.
@@ -528,23 +665,6 @@ cdef uint64_t random_uint64_fewbits():
     """
     return random_u64() & random_u64() & random_u64()
 
-#----------------------------------------------
-# Magic Transformation
-#----------------------------------------------
-cdef uint64_t transform(uint64_t key, uint64_t magic, int square):
-    """
-    Applies the magic multiplation and right shift, returns a 64-bit ULL index.
-    """
-    return (key * magic) >> SHIFT_BITS[square]
-
-#----------------------------------------------
-# Build matching blocker subset and attack tables
-#----------------------------------------------
-cdef struct BlockerMoveTables:
-    uint64_t* blockers
-    Bitboard* moves
-    size_t size
-
 cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):
     """
     Carry Rippler trick for finding subsets of a set. Returns next subset (Bitboard).
@@ -558,71 +678,70 @@ cdef Bitboard carry_rippler_next(Bitboard subset, Bitboard mask):
 
     return next
 
-cdef BlockerMoveTables build_blocker_move_tables(int square):
-    """
-    Building the Blocker / Move Tables. Returns constructed tables.
+#----------------------------------------------------
+# Build matching uint64 key and Bitboard value table
+#----------------------------------------------------
+cdef struct KeyBoardTable:
+    uint64_t* key
+    Bitboard* board
+    size_t size
 
-    - for a square, gets relevant blocker mask
+cdef KeyBoardTable build_key_board_table(int square, Bitboard mask, int bits, bb_func otf_func):
+    """
+    Building the Attacked Square Tables. Returns constructed tables.
+
+    - for a square, gets relevant attacking allies mask
     - instantiates tables and allocates memory
     - uses Carry Rippler trick to calculate all possible subsets
-    - for each subset, calculates the corresponding legal moves
+    - for each subset, calculates the corresponding attacked square
     - sets table size as 2^blocker squares
     """
-    cdef BlockerMoveTables tables
-    cdef Bitboard mask = get_blocker_mask(square)
-    cdef Bitboard subset = Bitboard(0, 0)
+
+    cdef KeyBoardTable table
+    cdef Bitboard subset = EMPTY_BITBOARD
     cdef int index = 0
 
-    tables.size = 1 << BLOCKER_BITS[square]
-    tables.blockers = <uint64_t*>malloc(tables.size * sizeof(uint64_t))
-    tables.moves = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
+    table.size = 1 << bits
+    table.key = <uint64_t*>malloc(table.size * sizeof(uint64_t))
+    table.board = <Bitboard*>malloc(table.size * sizeof(Bitboard))
 
-    if tables.blockers == NULL or tables.moves == NULL:
-        free_blocker_move_tables(&tables)
-        raise MemoryError("Failed to allocate memory for blocker move tables")
+    if table.key == NULL or table.board == NULL:
+        free_key_board_table(&table)
+        raise MemoryError("Failed to allocate memory for key/board table")
 
     while True:
-        tables.blockers[index] = merge(subset)
-        tables.moves[index] = find_moves_otf(subset, square)
+        table.key[index] = merge(subset)
+        table.board[index] = otf_func(subset, square)
         index += 1
         subset = carry_rippler_next(subset, mask)
         if subset.low == 0 and subset.high == 0:
             break
 
-    return tables
+    return table
 
-cdef void free_blocker_move_tables(BlockerMoveTables* tables):
+cdef void free_key_board_table(KeyBoardTable* table):
     """
-    Sets Blocker / Move tables to NULL and frees allocated memory.
+    Sets KeyBoard table to NULL and frees allocated memory.
     """
-    if tables.blockers != NULL:
-        free(tables.blockers)
-        tables.blockers = NULL
-    if tables.moves != NULL:
-        free(tables.moves)
-        tables.moves = NULL
-    tables.size = 0
+    if table.key != NULL:
+        free(table.key)
+        table.key = NULL
+    if table.board != NULL:
+        free(table.board)
+        table.board = NULL
+    table.size = 0
 
 #--------------------------------------------------
 # Searching for Magics - Brute Force Trial & Error
 #--------------------------------------------------
-
-cdef uint64_t find_magic(int square):
+cdef uint64_t find_magic(int square, Bitboard mask, int bits, int shift_bits, bb_func otf_func):
     """
     Finds a magic number for a given square (0-80). Returns magic if succesful, else prints warning and returns an empty 64-bit ULL.
 
-    - Creates move tables for the square
-    - Creates a 'used' table for reference
-    - Iterates 100M times to find magic.
-    - Gets a magic candidate, filtering out unpromising candidates (with fewer than 6 of top 8 bits set).
-    - Creates an index through multiplication / right shift.
-    - If the index has not been used, allocates the moves to the used array.
-    - If it has been used, asserts that the moves are the same, allowing for constructive collisions.
-    - If a magic succesfully hashes the entire array of possible blocker configurations, the magic is returned
     """
-    cdef uint64_t mask = merge(get_blocker_mask(square))
-    cdef BlockerMoveTables tables = build_blocker_move_tables(square)
-    cdef size_t used_size = 1 << (64 - SHIFT_BITS[square])
+    cdef uint64_t merged_mask = merge(mask) # think this is just equal to table.size??
+    cdef KeyBoardTable table = build_key_board_table(square, mask, bits, otf_func)
+    cdef size_t used_size = 1 << (64 - shift_bits) # annoyingly, this is not always equal to blocker_bits thanks to 17 and 53
     cdef Bitboard* used = <Bitboard*>malloc(used_size * sizeof(Bitboard))
     cdef uint64_t k, i, index, fail, counter, max_counter = 0
     cdef uint64_t magic, best_magic = 0
@@ -630,14 +749,14 @@ cdef uint64_t find_magic(int square):
     cdef uint64_t MAX_ITERATIONS = 100000000
 
     if used == NULL:
-        free_blocker_move_tables(&tables)
+        free_key_board_table(&table)
         raise MemoryError("Failed to allocate memory for used array")
 
     try:
         with tqdm(total=MAX_ITERATIONS, desc=f"Finding Magic for Square {square}", unit="magic") as pbar:
             for k in range(MAX_ITERATIONS):
                 magic = random_uint64_fewbits()
-                if count_bits((mask * magic) & 0xFFF0000000000000) < 6:  # Changed this to match Apery's magic filter - significant speedup as a result
+                if count_bits((merged_mask * magic) & 0xFFF0000000000000) < 6:  # Changed this from Chess Wiki to match Apery's magic filter - significant speedup as a result
                     pbar.update(1)
                     continue
 
@@ -646,11 +765,11 @@ cdef uint64_t find_magic(int square):
                     used[i] = FULL_BITBOARD
 
                 fail, counter = 0, 0
-                while fail == 0 and counter < tables.size:
-                    index = transform(tables.blockers[counter], magic, square)
+                while fail == 0 and counter < table.size:
+                    index = get_hash_value(table.key[counter], magic, shift_bits)
                     if is_board_full(used[index]):
-                        used[index] = tables.moves[counter]
-                    elif not same_board(used[index], tables.moves[counter]):
+                        used[index] = table.board[counter]
+                    elif not same_board(used[index], table.board[counter]):
                         fail = 1
                     counter += 1
 
@@ -663,25 +782,34 @@ cdef uint64_t find_magic(int square):
 
                 pbar.update(1)
                 if k % 100000 == 0:  # Update description
-                    pbar.set_description(f"Square {square}: Best {max_counter}/{tables.size}")
+                    pbar.set_description(f"Square {square}: Best {max_counter}/{table.size}")
 
-        print(f"***Failed to find Magic for square {square}. Best Magic {best_magic:016X} passed first {max_counter} entries ({max_counter/tables.size:.2%})***")
+        print(f"***Failed to find Magic for square {square}. Best Magic {best_magic:016X} passed first {max_counter} entries ({max_counter/table.size:.2%})***")
         return FAILED_MAGIC
     finally:
         free(used)
-        free_blocker_move_tables(&tables)
+        free_key_board_table(&table)
 
-def find_magics(squares=None):
+def find_magics(squares=None, action="moves"):
     """
     Python-accessible function to find, print and return magic numbers for specified/all board squares.
 
-    -param squares: List or array of square indices to find magics for. If None, finds magics for all squares.
-    -return: Dictionary mapping square indices to their magic numbers.
+    - param squares: List or array of square indices to find magics for. If None, finds magics for all squares.
+    - 'action' paramater to specify which magics are being searched for from ["moves", "attacks"]. Defaults to "moves".
+    - return: Dictionary mapping square indices to their magic numbers.
     """
     cdef array.array square_array
-    cdef int square, i, attempt
+    cdef int square, i
     cdef uint64_t magic
     cdef dict magic_dict = {}
+    cdef bb_func otf_func
+    if action == "moves":
+        otf_func = find_moves_otf
+    elif action == "attacks":
+        otf_func = find_attacked_squares_otf
+    else:
+        print("action not recognised")
+        return
 
     if squares is None:
         squares = range(81)
@@ -691,47 +819,42 @@ def find_magics(squares=None):
     if min(square_array) < 0 or max(square_array) > 80:
         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
 
-    print("****FINDING MAGICS****\n")
-
     for i in range(len(square_array)):
         square = square_array[i]
-        magic = find_magic(square)
+        mask = BLOCKER_MASK[square] if action == "moves" else ATTACK_MASKS[square]
+        bits = BLOCKER_BITS[square] if action == "moves" else ATTACK_BITS[square]
+        shift_bits = SHIFT_BITS[square] if action == "moves" else ATTACK_SHIFT_BITS[square]
+        magic = find_magic(square, mask, bits, shift_bits, otf_func)
         if magic != 0:
             magic_dict[square] = magic
         else:
             magic_dict[square] = '***FAILED***'
 
-    if len(square_array) == 81 and list(square_array) == list(range(81)):
-        print("cdef uint64_t[81] Magic = {")
-        for square in range(81):
-            print(f"0x{magic_dict.get(square, 0):016X},")
-        print("}")
-    else:
-        for square in square_array:
-            print(f"Square {square} Magic: 0x{magic_dict.get(square, 0):016X}")
-    print("\n****COMPLETE****")
+    print("MAGICS\n-------------------------------------")
+    for square in square_array:
+        print(f"Square {square} Magic: 0x{magic_dict.get(square, 0):016X}")
 
     return magic_dict
 
 #----------------------------------------------
 # Simulated Annealing for Magic Search - FOR POSTERITY
 #----------------------------------------------
-cdef int collision_count(uint64_t magic, BlockerMoveTables* tables, Bitboard* used, int n_bits):
+cdef int collision_count(uint64_t magic, KeyBoardTable* table, Bitboard* used, int n_bits):
     """
     Returns number of collisions generated by trying to hash blocker - move pairs for a square. Used as cost function for simulated annealing.
     """
     cdef int collisions, counter
 
     # Reset the used array
-    for i in range(tables.size):
+    for i in range(table.size):
         used[i] = FULL_BITBOARD
 
     collisions, counter = 0, 0
-    while counter < tables.size:
-        index = transform(tables.blockers[counter], magic, n_bits)
+    while counter < table.size:
+        index = get_hash_value(table.key[counter], magic, n_bits)
         if is_board_full(used[index]): #TODO: I believe there is a flaw in this logic due to empty move sets that may have already been mapped
-            used[index] = tables.moves[counter]
-        elif not same_board(used[index], tables.moves[counter]):
+            used[index] = table.board[counter]
+        elif not same_board(used[index], table.board[counter]):
             collisions += 1
         counter += 1
 
@@ -757,7 +880,7 @@ cdef simulated_annealing_magic(int square, uint64_t magic):
     Logic for attempting to find a magic candidate for given square via simulated annealing.
     """
     cdef int n_bits = BLOCKER_BITS[square]
-    cdef BlockerMoveTables tables  = build_blocker_move_tables(square)
+    cdef KeyBoardTable tables  = build_key_board_table(square, BLOCKER_MASK[square], BLOCKER_BITS[square], find_moves_otf)
     cdef Bitboard* used = <Bitboard*>malloc(tables.size * sizeof(Bitboard))
     if used == NULL:
         raise MemoryError("Failed to allocate memory for used array")
@@ -777,7 +900,7 @@ cdef simulated_annealing_magic(int square, uint64_t magic):
     cdef float ap
 
     try:
-        while T > 0.01:  # Termination condition
+        while T > 0.001:
             for i in range(10000):  # Number of iterations per temperature
                 new_magic = neighboring_magic(magic)
                 new_cost = collision_count(new_magic, &tables, used, n_bits)
@@ -795,7 +918,7 @@ cdef simulated_annealing_magic(int square, uint64_t magic):
             T *= alpha
     finally:
         free(&used)
-        free_blocker_move_tables(&tables)
+        free_key_board_table(&tables)
     print(f"best was {best_cost} collisions")
     return ZERO
 
@@ -827,9 +950,6 @@ def simulated_annealing(int square, uint64_t user_magic=ZERO):
 # Move Tables
 #==============================================================================
 
-cdef inline get_hash_value(uint64_t blocker_key, int square):
-    return (blocker_key * MAGIC[square]) >> SHIFT_BITS[square]
-
 cdef struct MoveTable:
     Bitboard* moves
     int size
@@ -849,7 +969,7 @@ cdef class MoveTables:
             if self.tables[i].moves != NULL:
                 free(self.tables[i].moves)
 
-    cdef void set_table(self, int square, BlockerMoveTables* blocker_moves, int size):
+    cdef void set_table(self, int square, KeyBoardTable* blocker_moves, int size):
         if self.tables[square].moves != NULL:
             free(self.tables[square].moves)
 
@@ -860,12 +980,12 @@ cdef class MoveTables:
 
         cdef int i
         for i in range(blocker_moves.size):
-            index = get_hash_value(blocker_moves.blockers[i], square)
-            self.tables[square].moves[index] = blocker_moves.moves[i]
+            index = get_hash_value(blocker_moves.key[i], MAGIC[square], SHIFT_BITS[square])
+            self.tables[square].moves[index] = blocker_moves.board[i]
 
     cdef Bitboard get_move(self, int square, Bitboard occupancy):
         cdef uint64_t blocker_key = merge(get_blockers(occupancy, square))
-        cdef int index = get_hash_value(blocker_key, square)
+        cdef int index = get_hash_value(blocker_key, MAGIC[square], SHIFT_BITS[square])
         return self.tables[square].moves[index]
 
     def py_get_move(self, int square, Bitboard occupancy):
@@ -873,13 +993,13 @@ cdef class MoveTables:
 
 cdef MoveTables build_move_tables():
     cdef MoveTables move_tables = MoveTables()
-    cdef BlockerMoveTables blocker_moves
+    cdef KeyBoardTable blocker_moves
     cdef int i, size
     for i in tqdm(range(81), desc="Building Move Tables..."):
-        blocker_moves = build_blocker_move_tables(i)
+        blocker_moves = build_key_board_table(i, BLOCKER_MASK[i], BLOCKER_BITS[i], find_moves_otf)
         size = 1 << (64 - SHIFT_BITS[i])
         move_tables.set_table(i, &blocker_moves, size)
-        free_blocker_move_tables(&blocker_moves)
+        free_key_board_table(&blocker_moves)
 
     print('Move Tables Initialised.')
     return move_tables
@@ -888,6 +1008,38 @@ def py_build_move_tables():
     cdef MoveTables Moves = build_move_tables()
     return Moves
 
+#==============================================================================
+# Game Instance - As an Object for now
+#==============================================================================
+
+cdef class GameState:
+    #cdef MoveTables move_tables = build_move_tables()
+    cdef Bitboard occupancy
+    cdef Bitboard attackers
+    cdef Bitboard defenders
+    cdef Bitboard king
+    cdef Bitboard throne
+
+    def __cinit__(self):
+        self.occupancy = Bitboard(0x04223FF888402038, 0x0000000000007010)
+        self.attackers = Bitboard(0x0020383808002038, 0x0000000000007010)
+        self.defenders = Bitboard(0x040206C080400000,0x0000000000000000)
+        self.king = Bitboard(0x0000010000000000,0x0000000000000000)
+        self.throne = Bitboard(0x0000010000000000,0x0000000000000000)
+
+    def find_first_move(self, int square):
+        if 0 <= square <= 63:
+            if self.attackers.low & (1 << square) == (1 << square):
+                moves = self.move_tables.get_move(square, self.occupancy)
+                print_board(moves)
+            else:
+                print(f'no piece on square {square}')
+        else:
+            if self.attackers.high & (1 << square) == (1 << square):
+                moves = self.move_tables.get_move(square, self.occupancy)
+                print_board(moves)
+            else:
+                print(f'no piece on square {square}')
 
 #==============================================================================
 # Python Acessible Tests
@@ -899,11 +1051,18 @@ def print_blocker_masks():
     """
     print_masks()
 
-def print_blocker_bits():
+def print_mask_bitcount(str mask):
     """
-    Python-friendly function to print BLOCKER_BITS values
+    Python-friendly function to print BLOCKER_BITS/ATTACK_BITS count for board
     """
-    print_relevant_bits()
+    print_relevant_bits(mask)
+
+def py_start_pos():
+    cdef Bitboard b = Bitboard(0,0)
+
+    set_bit(&b, 40)
+
+    print_board(b)
 
 def py_demonstrate_blocker_merge(int square):
     cdef Bitboard unmerged = get_blocker_mask(square)
@@ -913,7 +1072,6 @@ def py_demonstrate_blocker_merge(int square):
     print("---------------------")
     print("Merged Board (disregard top two rows):")
     print_board(Bitboard(merged, 0))
-
 
 def test():
     cdef uint64_t r = random_u64()
@@ -925,20 +1083,17 @@ def py_build_bm_tables(int square):
     """
     Python-friendly test to inspect the BlockerMoveTables. Returns BlockerMoveTable for given square.
     """
-    cdef Bitboard tmp = Bitboard(0,0)
-    cdef BlockerMoveTables tables = build_blocker_move_tables(square)
-    blockers = [tables.blockers[i] for i in range(tables.size)]
-    moves = [tables.moves[i] for i in range(tables.size)]
-    free_blocker_move_tables(&tables)
+    cdef KeyBoardTable tables = build_key_board_table(square, BLOCKER_MASK[square], BLOCKER_BITS[square], find_moves_otf)
+    blockers = [tables.key[i] for i in range(tables.size)]
+    moves = [tables.board[i] for i in range(tables.size)]
+    free_key_board_table(&tables)
 
     return blockers, moves
 
 def test_magic(int square, uint64_t magic, verbose=False):
-    cdef BlockerMoveTables tables = build_blocker_move_tables(square)
+    cdef KeyBoardTable tables = build_key_board_table(square, BLOCKER_MASK[square], BLOCKER_BITS[square], find_moves_otf)
     cdef size_t used_size = 1 << (64 - SHIFT_BITS[square])
     cdef Bitboard* used = <Bitboard*>malloc(used_size * sizeof(Bitboard))
-    blockers = [tables.blockers[i] for i in range(tables.size)]
-    moves = [tables.moves[i] for i in range(tables.size)]
     if used == NULL:
         raise MemoryError("Failed to allocate memory for used array")
 
@@ -947,14 +1102,14 @@ def test_magic(int square, uint64_t magic, verbose=False):
 
     unique, constructive, destructive = 0, 0, 0
     for i in range(tables.size):
-        index = transform(tables.blockers[i], magic, square)
+        index = get_hash_value(tables.key[i], magic, SHIFT_BITS[square])
         if is_board_full(used[index]):
-            used[index] = tables.moves[i]
+            used[index] = tables.board[i]
             if verbose:
                 print(f'move {i} successfully hashed to index {index}')
             unique += 1
         else:
-            if same_board(used[index], tables.moves[i]):
+            if same_board(used[index], tables.board[i]):
                 if verbose:
                     print(f"constructive collision for move {i} at index {index}")
                 constructive += 1
@@ -964,5 +1119,17 @@ def test_magic(int square, uint64_t magic, verbose=False):
                 destructive += 1
 
     print(f"SQUARE {square}: unique: {unique} | constructive: {constructive} | destructive: {destructive}")
-    free(&used)  # Don't forget to free used and blocker/move tables!
-    free_blocker_move_tables(&tables)
+    free(&used)
+    free_key_board_table(&tables)
+
+def py_build_attacked_square_tables(int square):
+    """
+    Python-friendly test to inspect the AttackedSquareTables. Returns AttackedSquareTables for given square.
+    """
+    cdef bb_func otf_func = find_attacked_squares_otf
+    cdef KeyBoardTable tables = build_key_board_table(square, ATTACK_MASKS[square], ATTACK_BITS[square], otf_func)
+    keys = [tables.key[i] for i in range(tables.size)]
+    boards = [tables.board[i] for i in range(tables.size)]
+    free_key_board_table(&tables)
+
+    return keys, boards

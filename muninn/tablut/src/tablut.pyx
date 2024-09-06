@@ -16,6 +16,8 @@ from typing import List
 from cpython cimport array
 import array
 from libc.math cimport exp
+import sys
+import locale
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -267,6 +269,12 @@ Bitboard(low = 0x1000000000000000, high = 0x0000000000022000),
 Bitboard(low = 0x2000000000000000, high = 0x0000000000004000),
 Bitboard(low = 0x4000000000000000, high = 0x0000000000008000)]
 
+cdef inline Bitboard get_attack_allies(Bitboard allies, int square):
+    """
+    Returns relevant supporting allies in potenital attack squares for a given square and Bitboard. Use with allied Bitboard to calculate attacked squares.
+    """
+    return and_board(allies, ATTACK_MASKS[square])
+
 cdef int[81] ATTACK_BITS = [
     2, 2, 3, 3, 3, 3, 3, 2, 2,
     2, 2, 3, 3, 3, 3, 3, 2, 2,
@@ -335,6 +343,17 @@ cdef inline void set_bit(Bitboard* board, int index):
         raise ValueError("Bit index must be between 0 and 80")
 
 cdef inline bint is_bit_set(Bitboard* board, int index):
+    """
+    Returns True if bit at square index 0-80 is set, else False.
+    """
+    if 0 <= index < 63:
+        return bool(board.low & ((<uint64_t>1) << index))
+    elif 63 <= index < 81:
+        return bool(board.high & ((<uint64_t>1) << (index - 63)))
+    else:
+        raise ValueError("Bit index must be between 0 and 80")
+
+cdef inline bint is_bit_set_2(Bitboard board, int index):
     """
     Returns True if bit at square index 0-80 is set, else False.
     """
@@ -963,6 +982,8 @@ cdef class MoveTables:
             self.tables[i].moves = NULL
             self.tables[i].size = 0
 
+        self.build_move_tables()
+
     def __dealloc__(self):
         cdef int i
         for i in range(81):
@@ -975,7 +996,7 @@ cdef class MoveTables:
 
         self.tables[square].moves = <Bitboard*>malloc(size * sizeof(Bitboard))
         if self.tables[square].moves == NULL:
-            raise MemoryError("Failed to allocate memory for used array")
+            raise MemoryError("Failed to allocate memory for used array (Move Tables)")
         self.tables[square].size = size
 
         cdef int i
@@ -991,23 +1012,82 @@ cdef class MoveTables:
     def py_get_move(self, int square, Bitboard occupancy):
         return self.get_move(square, occupancy)
 
-cdef MoveTables build_move_tables():
-    cdef MoveTables move_tables = MoveTables()
-    cdef KeyBoardTable blocker_moves
-    cdef int i, size
-    for i in tqdm(range(81), desc="Building Move Tables..."):
-        blocker_moves = build_key_board_table(i, BLOCKER_MASK[i], BLOCKER_BITS[i], find_moves_otf)
-        size = 1 << (64 - SHIFT_BITS[i])
-        move_tables.set_table(i, &blocker_moves, size)
-        free_key_board_table(&blocker_moves)
+    cdef void build_move_tables(self):
+        cdef KeyBoardTable blocker_moves
+        cdef int i, size
+        for i in tqdm(range(81), desc="Building Move Tables..."):
+            blocker_moves = build_key_board_table(i, BLOCKER_MASK[i], BLOCKER_BITS[i], find_moves_otf)
+            size = 1 << (64 - SHIFT_BITS[i])
+            self.set_table(i, &blocker_moves, size)
+            free_key_board_table(&blocker_moves)
 
-    print('Move Tables Initialised.')
-    return move_tables
+        print('Move Tables Initialised.')
 
 def py_build_move_tables():
-    cdef MoveTables Moves = build_move_tables()
-    return Moves
+    cdef MoveTables move_tables = MoveTables()
+    return move_tables
 
+#==============================================================================
+# Attack Tables - Pretty Much Duplicated from Above
+#==============================================================================
+
+cdef struct AttackTable:
+    Bitboard* attacks
+    int size
+
+cdef class AttackTables:
+    cdef AttackTable[81] tables
+
+    def __cinit__(self):
+        cdef int i
+        for i in range(81):
+            self.tables[i].attacks = NULL
+            self.tables[i].size = 0
+
+        self.build_attack_tables()
+
+    def __dealloc__(self):
+        cdef int i
+        for i in range(81):
+            if self.tables[i].attacks != NULL:
+                free(self.tables[i].attacks)
+
+    cdef void set_table(self, int square, KeyBoardTable* allies_attacks, int size):
+        if self.tables[square].attacks != NULL:
+            free(self.tables[square].attacks)
+
+        self.tables[square].attacks = <Bitboard*>malloc(size * sizeof(Bitboard))
+        if self.tables[square].attacks == NULL:
+            raise MemoryError("Failed to allocate memory for used array (Attack Tables)")
+        self.tables[square].size = size
+
+        cdef int i
+        for i in range(allies_attacks.size):
+            index = get_hash_value(allies_attacks.key[i], ATTACK_MAGICS[square], ATTACK_SHIFT_BITS[square])
+            self.tables[square].attacks[index] = allies_attacks.board[i]
+
+    cdef Bitboard get_attacks(self, int square, Bitboard allies):
+        cdef uint64_t ally_key = merge(get_attack_allies(allies, square))
+        cdef int index = get_hash_value(ally_key, ATTACK_MAGICS[square], ATTACK_SHIFT_BITS[square])
+        return self.tables[square].attacks[index]
+
+    def py_get_attacks(self, int square, Bitboard allies):
+        return self.get_attacks(square, allies)
+
+    cdef void build_attack_tables(self):
+        cdef KeyBoardTable allies_attacks
+        cdef int i, size
+        for i in tqdm(range(81), desc="Building Attack Tables..."):
+            allies_attacks = build_key_board_table(i, ATTACK_MASKS[i], ATTACK_BITS[i], find_attacked_squares_otf)
+            size = 1 << (64 - ATTACK_SHIFT_BITS[i])
+            self.set_table(i, &allies_attacks, size)
+            free_key_board_table(&allies_attacks)
+
+        print('Attack Tables Initialised.')
+
+def py_build_attack_tables():
+    cdef AttackTables attack_tables = AttackTables()
+    return attack_tables
 #==============================================================================
 # Game Instance - As an Object for now
 #==============================================================================
@@ -1018,28 +1098,68 @@ cdef class GameState:
     cdef Bitboard attackers
     cdef Bitboard defenders
     cdef Bitboard king
+    cdef Bitboard all_defenders
     cdef Bitboard throne
 
+    cdef int side
+
     def __cinit__(self):
+        print("Initializing GameState")
         self.occupancy = Bitboard(0x04223FF888402038, 0x0000000000007010)
         self.attackers = Bitboard(0x0020383808002038, 0x0000000000007010)
         self.defenders = Bitboard(0x040206C080400000,0x0000000000000000)
         self.king = Bitboard(0x0000010000000000,0x0000000000000000)
+        self.all_defenders = Bitboard(0x040207C080400000,0x0000000000000000)
         self.throne = Bitboard(0x0000010000000000,0x0000000000000000)
 
-    def find_first_move(self, int square):
-        if 0 <= square <= 63:
-            if self.attackers.low & (1 << square) == (1 << square):
-                moves = self.move_tables.get_move(square, self.occupancy)
-                print_board(moves)
-            else:
-                print(f'no piece on square {square}')
-        else:
-            if self.attackers.high & (1 << square) == (1 << square):
-                moves = self.move_tables.get_move(square, self.occupancy)
-                print_board(moves)
-            else:
-                print(f'no piece on square {square}')
+        self.side = -1
+
+    def print_bitboards(self):
+        print("CURRENT POSITION\n---------- OCCUPANCY ----------")
+        print_board(self.occupancy)
+        print("---------- ATTACKERS ----------")
+        print_board(self.attackers)
+        print("---------- DEFENDERS ----------")
+        print_board(self.defenders)
+        print("------------ KING ------------")
+        print_board(self.king)
+        print("-------- ALL DEFENDERS --------")
+        print_board(self.all_defenders)
+        print("----------- THRONE -----------")
+        print_board(self.throne)
+
+    def print_board(self, unicode=True):
+        is_mac = sys.platform == 'darwin'
+        if not unicode == True:
+            is_mac = False
+
+        EMPTY = '·'
+        KING = '♔' if is_mac else 'K'
+        DEFENDER = '♙' if is_mac else 'D'
+        ATTACKER = '♟' if is_mac else 'A'
+        THRONE = '☆' if is_mac else 'T'
+
+        board = [[EMPTY for _ in range(9)] for _ in range(9)]
+
+        board[4][4] = THRONE
+
+        def set_piece(bitboard, symbol):
+            for i in range(9):
+                for j in range(9):
+                    if is_bit_set_2(bitboard, i * 9 + j):
+                        board[i][j] = symbol
+
+        set_piece(self.king, KING)
+        set_piece(self.defenders, DEFENDER)
+        set_piece(self.attackers, ATTACKER)
+
+        print("   a b c d e f g h i  ")
+        for i, row in enumerate(board):
+            print(f"{9-i:2d}", end=' ')
+            for cell in row:
+                print(cell, end=' ')
+            print(f"{9-i:2d}")
+        print("   a b c d e f g h i  ")
 
 #==============================================================================
 # Python Acessible Tests
@@ -1090,9 +1210,17 @@ def py_build_bm_tables(int square):
 
     return blockers, moves
 
-def test_magic(int square, uint64_t magic, verbose=False):
-    cdef KeyBoardTable tables = build_key_board_table(square, BLOCKER_MASK[square], BLOCKER_BITS[square], find_moves_otf)
-    cdef size_t used_size = 1 << (64 - SHIFT_BITS[square])
+def test_magic(int square, uint64_t magic, str magic_type="moves", verbose=False):
+    cdef KeyBoardTable tables
+    if magic_type == "moves":
+        tables = build_key_board_table(square, BLOCKER_MASK[square], BLOCKER_BITS[square], find_moves_otf)
+    elif magic_type == "attacks":
+        tables = build_key_board_table(square, ATTACK_MASKS[square], ATTACK_BITS[square], find_attacked_squares_otf)
+    else:
+        print("Please re-check magic_type")
+    cdef int shift_bits = SHIFT_BITS[square] if magic_type == "moves" else ATTACK_SHIFT_BITS[square]
+    cdef size_t used_size = 1 << (64 - shift_bits)
+
     cdef Bitboard* used = <Bitboard*>malloc(used_size * sizeof(Bitboard))
     if used == NULL:
         raise MemoryError("Failed to allocate memory for used array")
@@ -1102,20 +1230,20 @@ def test_magic(int square, uint64_t magic, verbose=False):
 
     unique, constructive, destructive = 0, 0, 0
     for i in range(tables.size):
-        index = get_hash_value(tables.key[i], magic, SHIFT_BITS[square])
+        index = get_hash_value(tables.key[i], magic, shift_bits)
         if is_board_full(used[index]):
             used[index] = tables.board[i]
             if verbose:
-                print(f'move {i} successfully hashed to index {index}')
+                print(f'{magic_type[:-1]} {i} successfully hashed to index {index}')
             unique += 1
         else:
             if same_board(used[index], tables.board[i]):
                 if verbose:
-                    print(f"constructive collision for move {i} at index {index}")
+                    print(f"constructive collision for {magic_type[:-1]} {i} at index {index}")
                 constructive += 1
             else:
                 if verbose:
-                    print(f"!!!COLLISION FOR MOVE {i} AT INDEX {index}")
+                    print(f"!!!COLLISION FOR {str.capitalize(magic_type[:-1])} {i} AT INDEX {index}")
                 destructive += 1
 
     print(f"SQUARE {square}: unique: {unique} | constructive: {constructive} | destructive: {destructive}")

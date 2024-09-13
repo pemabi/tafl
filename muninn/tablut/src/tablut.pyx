@@ -4,7 +4,7 @@
 #==============================================================================
 # TODO: refactor magics and Bitboard Masks to 3x3s. Possible create Blocker Masks dynamically at start
 
-from libc.stdint cimport uint64_t
+from libc.stdint cimport uint64_t, uint8_t, uint16_t
 from cpython.dict cimport PyDict_SetItem, PyDict_GetItem
 from cpython.object cimport PyObject
 from tqdm import tqdm
@@ -17,7 +17,11 @@ from cpython cimport array
 import array
 from libc.math cimport exp
 import sys
-import locale
+cimport cython
+from libc.math cimport log2 as clog2
+from libc.time cimport clock, CLOCKS_PER_SEC
+from libc.stdio cimport printf
+
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -26,6 +30,9 @@ import locale
 # Bitboard Struct and Constants Definition
 #==============================================================================
 ZERO = <uint64_t>0
+THRONE = <uint64_t>0x0000010000000000
+THRONE_MASK = <uint64_t>0x7FFFFEFFFFFFFFFF
+KING_MOVE_FLAG = <uint16_t>0x4000
 
 cdef struct Bitboard:
     uint64_t low
@@ -336,7 +343,7 @@ cdef inline void set_bit(Bitboard* board, int index):
     Sets bit at square index 0-80 to 1.
     """
     if 0 <= index < 63:
-        board.low |= (<uint64_t>1) << index
+        board.low |= (<uint64_t>1) << index  # NOTE that I do not need to dereference pointers in this case. When passing an object pointer, Cython auto dereferences when I access its members
     elif 63 <= index < 81:
         board.high |= (<uint64_t>1) << (index - 63)
     else:
@@ -375,6 +382,22 @@ cdef void clear_bit(Bitboard* board, int index):
     else:
         raise ValueError("Bit index must be between 0 and 80")
 
+cdef inline void pop_bit(uint64_t* bb_segment, int index):
+    """
+    Pops bit of 64-bit int at given index
+    """
+    bb_segment[0] &= ~((<uint64_t>1) << index)
+
+cdef inline uint16_t pop_lsb(uint64_t* bb_segment):
+    """
+    Finds and returns LSB square index, plus pops lsb in place. Used while iterating during move generation.
+    """
+    cdef int lsb_index
+    lsb_index = lsb(bb_segment[0])
+    pop_bit(bb_segment, lsb_index)
+
+    return (<uint16_t>lsb_index)
+
 cdef inline uint64_t merge(Bitboard board):
     """
     Uses OR to cast board uint64s together, returning a single uint64. Used to generate blocker keys.
@@ -383,7 +406,7 @@ cdef inline uint64_t merge(Bitboard board):
 
 cdef int count_bits(uint64_t b):
     """
-    Returns int count of set bits in a uint64.
+    Returns int count of set bits in a uint64 (Using Brian Kernighan's way).
     """
     cdef int r = 0
     while b:
@@ -408,6 +431,34 @@ cdef inline Bitboard and_board(Bitboard board_1, Bitboard board_2):
     board.low = board_1.low & board_2.low
     board.high = board_1.high & board_2.high
     return board
+
+## Need some Bitscan / LSB MSB finding functions
+cdef int[64] DE_BRUIJN_INDEX = [
+    0, 47,  1, 56, 48, 27,  2, 60,
+   57, 49, 41, 37, 28, 16,  3, 61,
+   54, 58, 35, 52, 50, 42, 21, 44,
+   38, 32, 29, 23, 17, 11,  4, 62,
+   46, 55, 26, 59, 40, 36, 15, 53,
+   34, 51, 20, 43, 31, 22, 10, 45,
+   25, 39, 14, 33, 19, 30,  9, 24,
+   13, 18,  8, 12,  7,  6,  5, 63
+]
+
+cdef uint64_t DE_BRUIJN_64 = 0x03f79d71b4cb0a89
+
+cdef inline int lsb(uint64_t x):
+    """
+    Returns index of least signficant bit for a given pointer to a uint_64. Must be non-zero.
+
+    - Using Kim Walisch's extension of the De Bruijn method.
+    """
+    return DE_BRUIJN_INDEX[((x ^ (x-1)) * DE_BRUIJN_64) >> 58]
+
+cdef inline int brian_kernighan_lsb(uint64_t x):
+    """
+    Less performant, but more robust lsb function. Keeping in code to validate De Bruijn lsb function.
+    """
+    return count_bits((x & -x)-1)
 
 #==============================================================================
 # Basic Bitboard Handling
@@ -436,6 +487,14 @@ cdef Bitboard create_board(): #TODO: once I have other Bitboards, modify so this
     cdef Bitboard bitboard
     set_start_position(&bitboard)
     return bitboard
+
+cdef Bitboard create_random_board():
+    cdef Bitboard board
+    cdef uint64_t low_mask = 0x7FFFFFFFFFFFFFFF
+    cdef uint64_t high_mask = 0x000000000003FFFF
+    board.low = random_uint64_fewbits() & low_mask
+    board.high = random_uint64_fewbits() & high_mask
+    return board
 
 cdef inline is_board_empty(Bitboard board):
     """
@@ -1023,10 +1082,6 @@ cdef class MoveTables:
 
         print('Move Tables Initialised.')
 
-def py_build_move_tables():
-    cdef MoveTables move_tables = MoveTables()
-    return move_tables
-
 #==============================================================================
 # Attack Tables - Pretty Much Duplicated from Above
 #==============================================================================
@@ -1088,6 +1143,7 @@ cdef class AttackTables:
 def py_build_attack_tables():
     cdef AttackTables attack_tables = AttackTables()
     return attack_tables
+
 #==============================================================================
 # Game Instance - As an Object for now
 #==============================================================================
@@ -1104,15 +1160,19 @@ cdef class GameState:
     cdef int side
 
     def __cinit__(self):
-        print("Initializing GameState")
+        self.set_start_pos()
+
+    def set_start_pos(self):
         self.occupancy = Bitboard(0x04223FF888402038, 0x0000000000007010)
         self.attackers = Bitboard(0x0020383808002038, 0x0000000000007010)
         self.defenders = Bitboard(0x040206C080400000,0x0000000000000000)
         self.king = Bitboard(0x0000010000000000,0x0000000000000000)
         self.all_defenders = Bitboard(0x040207C080400000,0x0000000000000000)
         self.throne = Bitboard(0x0000010000000000,0x0000000000000000)
+        self.side = 1
 
-        self.side = -1
+    def change_turn(self):
+        self.side = self.side * -1
 
     def print_bitboards(self):
         print("CURRENT POSITION\n---------- OCCUPANCY ----------")
@@ -1160,6 +1220,116 @@ cdef class GameState:
                 print(cell, end=' ')
             print(f"{9-i:2d}")
         print("   a b c d e f g h i  ")
+
+#==============================================================================
+# Move Generation
+#==============================================================================
+
+cdef struct MoveList:
+    uint16_t* moves
+    int size
+    int count
+
+cdef MoveList* build_move_list() except NULL:
+    cdef MoveList* list = <MoveList*>malloc(sizeof(MoveList))
+    if list == NULL:
+        raise MemoryError("Failed to allocate memory for MoveList struct")
+
+    list.size = 256
+    list.count = 0
+    list.moves = <uint16_t*>malloc(list.size * sizeof(uint16_t))
+
+    if list.moves == NULL:
+        free(list)
+        raise MemoryError("Failed to allocate memory for moves array")
+
+    return list
+
+cdef void free_move_list(MoveList* list):
+    if list != NULL:
+        if list.moves != NULL:
+            free(list.moves)
+        free(list)
+
+cdef inline Bitboard filter_king_moves(Bitboard* empty, Bitboard* raw_moves):
+    cdef Bitboard moves
+    moves.low = raw_moves.low & empty.low
+    moves.high = raw_moves.high & empty.high
+    return moves
+
+cdef inline Bitboard filter_piece_moves(Bitboard* occupancy, Bitboard* raw_moves):
+    cdef Bitboard moves
+    moves.low = raw_moves.low & ~occupancy.low & THRONE_MASK
+    moves.high = raw_moves.high & ~occupancy.high
+    return moves
+
+cdef inline uint16_t encode_move(uint16_t from_square_shifted, uint16_t to_square, bint is_king):
+    cdef uint16_t encoded_move
+    encoded_move = from_square_shifted | to_square
+    if is_king == True:
+        encoded_move = encoded_move | KING_MOVE_FLAG
+    return encoded_move
+
+cdef void find_moves(MoveList* move_list, MoveTables* move_table, GameState* position):
+    """
+    Takes pointers to MoveList, MoveTables, and GameState, modifying MoveList in place with all legal moves. Resets move list at the start.
+    """
+    cdef Bitboard move_board
+    move_list.count = 0
+
+    if position.side == 1:
+        move_board = position.all_defenders
+    else:
+        move_board = position.attackers
+
+    while move_board.low != ZERO or move_board.high != ZERO:
+        if move_board.low != ZERO:
+            from_square = pop_lsb(&move_board.low)
+        else:
+            from_square = pop_lsb(&move_board.high) + 63
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+        legal_moves = filter_piece_moves(&position.occupancy, &legal_moves)
+
+        while legal_moves.low != ZERO or legal_moves.high != ZERO:
+            if legal_moves.low != ZERO:
+                to_square = pop_lsb(&legal_moves.low)
+            else:
+                to_square = pop_lsb(&legal_moves.high) + 63
+
+            encoded_move = (from_square << 7) | to_square
+
+            move_list.moves[move_list.count] = encoded_move
+            move_list.count += 1
+
+#==============================================================================
+# Tablut Engine Class - prepares gamespace
+#==============================================================================
+
+cdef void initialize_tables():
+    global global_move_tables, global_attack_tables
+    if global_move_tables is NULL:
+        global_move_tables = MoveTables()
+    if global_attack_tables is NULL:
+        global_attack_tables = AttackTables()
+
+cdef void cleanup_tables():
+    global global_move_tables, global_attack_tables
+    if global_move_tables is not NULL:
+        del global_move_tables
+        global_move_tables = NULL
+    if global_attack_tables is not NULL:
+        del global_attack_tables
+        global_attack_tables = NULL
+
+cdef class TablutEngine:
+    def __cinit__(self):
+        initialize_tables()
+
+    def __dealloc__(self):
+        cleanup_tables()
+
+    def some_method(self):
+        some_function_using_tables()
 
 #==============================================================================
 # Python Acessible Tests
@@ -1261,3 +1431,155 @@ def py_build_attacked_square_tables(int square):
     free_key_board_table(&tables)
 
     return keys, boards
+
+cdef int find_lsb(Bitboard bb):
+    if bb.low != ZERO:
+        return lsb(bb.low)
+    elif bb.high != ZERO:
+        return lsb(bb.high) + 63
+    else:
+        return -1
+
+cdef void print_binary(uint64_t n):
+    cdef int i
+    for i in range(63, -1, -1):
+        printf("%d", (n >> i) & 1)
+    printf("\n")
+
+cdef void test_lsb_methods():
+    """
+    Test results show that lsb function works great - except returns 63 when shown an empty BB
+    """
+    cdef uint64_t[21] test_values = [
+        1, 2, 4, 8, 16, 32, 64, 128,
+        3, 5, 7, 9, 15, 17, 31, 33,
+        0xFFFFFFFFFFFFFFFF,
+        0x8000000000000000,
+        0x0000000000000001,
+        0x0000000100000000,
+        0x0000000000000000
+    ]
+    cdef int num_tests = 21
+    cdef int i, de_bruijn_result, kernighan_result
+
+    for i in range(num_tests):
+        de_bruijn_result = lsb(test_values[i])
+        kernighan_result = brian_kernighan_lsb(test_values[i])
+
+        printf("Test value: %llu\n", test_values[i])
+        printf("De Bruijn result: %d\n", de_bruijn_result)
+        printf("Kernighan result: %d\n", kernighan_result)
+
+        if de_bruijn_result != kernighan_result:
+            printf("Mismatch found!\n")
+
+        printf("\n")
+
+def py_test_lsb_methods():
+    test_lsb_methods()
+
+cdef void test_random_bitboard_lsb():
+  cdef int i, test_lsb, true_lsb
+  cdef Bitboard board
+  cdef uint64_t mask
+
+  for i in range(1000):  # Test 1000 random boards
+      board = create_random_board()
+      test_lsb = find_lsb(board)
+
+      # Find true LSB for verification
+      if board.low != ZERO:
+          true_lsb = brian_kernighan_lsb(board.low)
+      elif board.high != ZERO:
+          true_lsb = brian_kernighan_lsb(board.high) + 63
+      else:
+        true_lsb = -1
+
+      if test_lsb != true_lsb:
+          printf("Mismatch found:\n")
+          printf("Low:  ")
+          print_binary(board.low)
+          printf("High: ")
+          print_binary(board.high)
+          printf("Found LSB: %d, True LSB: %d\n", test_lsb, true_lsb)
+          return
+
+  printf("All 1000 random bitboard tests passed successfully.\n")
+
+def py_test_random_bitboard_lsb():
+    test_random_bitboard_lsb()
+
+cdef class Timer:
+    cdef double start_time
+
+    cpdef void start(self):
+        self.start_time = clock()
+
+    cpdef double end(self):
+        cdef double end_time = clock()
+        return (end_time - self.start_time) / CLOCKS_PER_SEC
+
+cdef void test_itererate_pop_lsb():
+    cdef Bitboard bb = EMPTY_BITBOARD
+    cdef int i
+    cdef uint16_t index
+
+    print_board(bb)
+    print("-------------------")
+    for i in range(81):
+        set_bit(&bb, i)
+
+    print_board(bb)
+    print("-------------------")
+    while bb.low != ZERO:
+        index = pop_lsb(&bb.low)
+        print_board(bb)
+        print(index)
+        print("-------------------")
+    while bb.high != ZERO:
+        index = pop_lsb(&bb.high) + 63
+        print_board(bb)
+        print(index)
+        print("-------------------")
+
+def py_test_pop_lsb():
+    test_itererate_pop_lsb()
+
+cdef void print_move(uint16_t encoded_move):
+    cdef int from_square = encoded_move >> 7
+    cdef int to_square = encoded_move & 127
+
+    cdef char from_file = (from_square % 9) + 97  # 97 is ASCII for 'a'
+    cdef int from_rank = 9 - (from_square // 9)
+    cdef char to_file = (to_square % 9) + 97
+    cdef int to_rank = 9 - (to_square // 9)
+
+    printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
+
+cdef main():
+    cdef MoveTables Moves = MoveTables()
+    cdef AttackTables Attacks = AttackTables()
+    cdef MoveList move_list = build_move_list()
+    cdef GameState Position = GameState()
+    cdef int i = 0 # move_list counter
+    cdef int from_square, to_square
+    cdef uint16_t encoded_move
+
+    try:
+        Position.print_board()
+        #Position.change_turn()
+        find_moves(&move_list, &Moves, &Position)
+
+        printf("Generated %d moves:\n", move_list.count)
+        for i in range(move_list.count):
+            printf("Move %d: ", i+1)
+            print_move(move_list.moves[i])
+
+        printf("Total number of moves: %d\n", move_list.count)
+    finally:
+        free_move_list(&move_list)
+
+def py_main():
+    main()
+
+# TODO: find_moves is now broken, MoveTables, AttackTables, GameState can't be passed as pointers. This is actually ok for MoveTables and AttackTables as these are instantiatd once when module is loaded / program is started. Gamestate should be a struct. Others should be created at runtime?

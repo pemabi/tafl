@@ -1,0 +1,46 @@
+Wed Aug  7 08:10:00 2024    output.prof
+
+         10650655 function calls (9975388 primitive calls) in 9.371 seconds
+
+   Ordered by: cumulative time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.003    0.003    9.371    9.371 {built-in method builtins.exec}
+        1    0.001    0.001    9.368    9.368 <string>:1(<module>)
+        1    0.006    0.006    9.367    9.367 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2999429944.py:18(run_random_sim)
+     1000    0.092    0.000    9.318    0.009 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2999429944.py:5(random_playout)
+   104903    0.039    0.000    7.651    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2999429944.py:1(random_agent)
+   104903    7.284    0.000    7.525    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:150(generate_moves)
+   106903    0.033    0.000    0.791    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:218(is_terminal)
+   104903    0.333    0.000    0.785    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:113(apply_move)
+    52878    0.053    0.000    0.758    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:185(is_surround)
+726000/50733    0.656    0.000    0.705    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:193(flood_fill)
+   104903    0.158    0.000    0.394    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:56(find_captures)
+  7627866    0.241    0.000    0.241    0.000 {method 'append' of 'list' objects}
+   419612    0.202    0.000    0.202    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:66(add_captures)
+   104903    0.031    0.000    0.086    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/lib/python3.10/random.py:375(choice)
+   104903    0.058    0.000    0.058    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2132385399.py:26(update_hash)
+   104903    0.038    0.000    0.050    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/lib/python3.10/random.py:239(_randbelow_with_getrandbits)
+   510825    0.039    0.000    0.039    0.000 {method 'add' of 'set' objects}
+     1000    0.006    0.000    0.032    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:34(set_starting_position)
+   103421    0.031    0.000    0.032    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:85(add_king_captures)
+     1000    0.018    0.000    0.018    0.000 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2132385399.py:15(compute_hash)
+      770    0.004    0.000    0.013    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/envs/hex/lib/python3.10/site-packages/ipykernel/ipkernel.py:775(_clean_thread_parent_frames)
+   146545    0.009    0.000    0.009    0.000 {method 'getrandbits' of '_random.Random' objects}
+        1    0.000    0.000    0.008    0.008 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2132385399.py:2(__init__)
+        1    0.006    0.006    0.007    0.007 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/2132385399.py:8(init_zobrist_table)
+     1000    0.007    0.000    0.007    0.000 {built-in method numpy.array}
+   104903    0.005    0.000    0.005    0.000 {built-in method builtins.len}
+      385    0.002    0.000    0.005    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/envs/hex/lib/python3.10/site-packages/ipykernel/ipkernel.py:790(<setcomp>)
+   104903    0.004    0.000    0.004    0.000 {method 'bit_length' of 'int' objects}
+        1    0.003    0.003    0.004    0.004 /var/folders/nc/4mjw7byx2j91c57f4944nl440000gn/T/ipykernel_26258/1274247237.py:19(__init__)
+      385    0.003    0.000    0.004    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/lib/python3.10/threading.py:1478(enumerate)
+     3465    0.003    0.000    0.003    0.000 /Users/peterbitman/.pyenv/versions/3.10.6/lib/python3.10/threading.py:1145(ident)
+        1    0.001    0.001    0.001    0.001 {built-in method numpy.zeros}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+      770    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+      385    0.000    0.000    0.000    0.000 {method '__exit__' of '_thread.RLock' objects}
+     1540    0.000    0.000    0.000    0.000 {method 'keys' of 'dict' objects}
+      770    0.000    0.000    0.000    0.000 {method 'values' of 'dict' objects}
+
+

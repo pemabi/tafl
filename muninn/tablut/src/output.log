@@ -1,0 +1,234 @@
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    encoded_move = from_square_shifted | to_square
+    if is_king == True:
+        encoded_move = encoded_move | KING_MOVE_FLAG
+    return encoded_move
+
+cdef void find_moves(MoveList* move_list, MagicTable* move_table, GameState* position):
+                                                                           ^
+------------------------------------------------------------
+
+tablut.pyx:1259:75: Pointer base type cannot be a Python object
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        square = square_array[i]
+        mask = constants["mask"]
+        bits = constants["bits"]
+        shift_bits = constants["shift_bits"]
+        otf_func = constants["otf_func"]
+        magic = find_magic(square, mask, bits, shift_bits, otf_func)
+                                                           ^
+------------------------------------------------------------
+
+tablut.pyx:922:59: Cannot convert Python object to 'bb_func'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        mask = constants["mask"][i]
+        bits = constants["bits"][i]
+        shift_bits = constants["shift_bits"][i]
+        magic = constants["magic"][i]
+        otf_func = constants["otf_func"]
+        blocker_moves = build_key_board_table(i, mask, bits, otf_func)
+                                                             ^
+------------------------------------------------------------
+
+tablut.pyx:1119:61: Cannot convert Python object to 'bb_func'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        bits = constants["bits"][i]
+        shift_bits = constants["shift_bits"][i]
+        magic = constants["magic"][i]
+        otf_func = constants["otf_func"]
+        blocker_moves = build_key_board_table(i, mask, bits, otf_func)
+        fill_square_table(table, i, &blocker_moves, shift_bits, magic)
+                         ^
+------------------------------------------------------------
+
+tablut.pyx:1120:25: Call with wrong number of arguments (expected 6, got 5)
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+cdef search_magic_table(MagicTable* table, int square, Bitboard bb, uint64_t magic, int shift_bits):
+    """
+    for a given Magic Table, square and 'raw' key, merges the key, hashes it, then returns relevant value from Table.
+    """
+    cdef uint64_t bkey = merge(get_blockers(bb, square))
+    cdef int index = get_hash_value(key, magic, shift_bits)
+                                    ^
+------------------------------------------------------------
+
+tablut.pyx:1130:36: undeclared name not builtin: key
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    while move_board.low != ZERO or move_board.high != ZERO:
+        if move_board.low != ZERO:
+            from_square = pop_lsb(&move_board.low)
+        else:
+            from_square = pop_lsb(&move_board.high) + 63
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+                                ^
+------------------------------------------------------------
+
+tablut.pyx:1271:32: Object of type 'MagicTable' has no attribute 'get_move'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    while move_board.low != ZERO or move_board.high != ZERO:
+        if move_board.low != ZERO:
+            from_square = pop_lsb(&move_board.low)
+        else:
+            from_square = pop_lsb(&move_board.high) + 63
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+                                ^
+------------------------------------------------------------
+
+tablut.pyx:1271:32: Object of type 'MagicTable' has no attribute 'get_move'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    while move_board.low != ZERO or move_board.high != ZERO:
+        if move_board.low != ZERO:
+            from_square = pop_lsb(&move_board.low)
+        else:
+            from_square = pop_lsb(&move_board.high) + 63
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+                                ^
+------------------------------------------------------------
+
+tablut.pyx:1271:32: Object of type 'MagicTable' has no attribute 'get_move'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        if move_board.low != ZERO:
+            from_square = pop_lsb(&move_board.low)
+        else:
+            from_square = pop_lsb(&move_board.high) + 63
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+        legal_moves = filter_piece_moves(&position.occupancy, &legal_moves)
+                                                              ^
+------------------------------------------------------------
+
+tablut.pyx:1272:62: Cannot take address of Python variable 'legal_moves'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        legal_moves = move_table.get_move(from_square, position.occupancy)
+        legal_moves = filter_piece_moves(&position.occupancy, &legal_moves)
+
+        while legal_moves.low != ZERO or legal_moves.high != ZERO:
+            if legal_moves.low != ZERO:
+                to_square = pop_lsb(&legal_moves.low)
+                                    ^
+------------------------------------------------------------
+
+tablut.pyx:1276:36: Cannot take address of Python object attribute 'low'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+
+        while legal_moves.low != ZERO or legal_moves.high != ZERO:
+            if legal_moves.low != ZERO:
+                to_square = pop_lsb(&legal_moves.low)
+            else:
+                to_square = pop_lsb(&legal_moves.high) + 63
+                                    ^
+------------------------------------------------------------
+
+tablut.pyx:1278:36: Cannot take address of Python object attribute 'high'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    cdef int to_rank = 9 - (to_square // 9)
+
+    printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
+
+cdef main():
+    cdef MagicTable moves = build_magic_table("moves")
+                                             ^
+------------------------------------------------------------
+
+tablut.pyx:1526:45: Cannot assign type 'MagicTable *' to 'MagicTable'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+
+    printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
+
+cdef main():
+    cdef MagicTable moves = build_magic_table("moves")
+    cdef MagicTable attacks = build_magic_table("attacks")
+                                               ^
+------------------------------------------------------------
+
+tablut.pyx:1527:47: Cannot assign type 'MagicTable *' to 'MagicTable'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+    printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
+
+cdef main():
+    cdef MagicTable moves = build_magic_table("moves")
+    cdef MagicTable attacks = build_magic_table("attacks")
+    cdef MoveList move_list = build_move_list()
+                                             ^
+------------------------------------------------------------
+
+tablut.pyx:1528:45: Cannot assign type 'MoveList *' to 'MoveList'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+
+    try:
+        Position.print_board()
+        #Position.change_turn()
+        if Position.side == 1:
+            find_moves(&move_list, &moves, Position.all_defenders)
+                                                   ^
+------------------------------------------------------------
+
+tablut.pyx:1538:51: Cannot assign type 'Bitboard' to 'GameState *'
+
+Error compiling Cython file:
+------------------------------------------------------------
+...
+        Position.print_board()
+        #Position.change_turn()
+        if Position.side == 1:
+            find_moves(&move_list, &moves, Position.all_defenders)
+        else:
+            find_moves(&move_list, &moves, Position.attackers)
+                                                   ^
+------------------------------------------------------------
+
+tablut.pyx:1540:51: Cannot assign type 'Bitboard' to 'GameState *'
+Compiling tablut.pyx because it changed.
+[1/1] Cythonizing tablut.pyx
+Traceback (most recent call last):
+  File "/Users/peterbitman/Desktop/tafl/muninn/tablut/src/setup.py", line 5, in <module>
+    ext_modules = cythonize("tablut.pyx")
+  File "/Users/peterbitman/.pyenv/versions/hex/lib/python3.10/site-packages/Cython/Build/Dependencies.py", line 1154, in cythonize
+    cythonize_one(*args)
+  File "/Users/peterbitman/.pyenv/versions/hex/lib/python3.10/site-packages/Cython/Build/Dependencies.py", line 1321, in cythonize_one
+    raise CompileError(None, pyx_file)
+Cython.Compiler.Errors.CompileError: tablut.pyx

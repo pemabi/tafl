@@ -21,7 +21,7 @@ cimport cython
 from libc.math cimport log2 as clog2
 from libc.time cimport clock, CLOCKS_PER_SEC
 from libc.stdio cimport printf
-
+from typing import Dict, Any
 
 # TO UPDATE CYTHON CODE USE BELOW
 # python setup.py build_ext --inplace
@@ -188,7 +188,7 @@ cdef uint64_t[81] MAGIC = [
     0x30800046C0002102, 0x00C0004000180009, 0x204000084244000A,
     0x0004200001252900, 0x0504900002000840, 0x000A200101000280,
     0x0009200085000060, 0x81012000A44000A0, 0x840A400100101110,
-    0x0681200210200024, 0x8006200210000904, 0xA000200001224282]
+    0x0681200210200024, 0x0010200005080044, 0x0000A00001420082]
 
 def get_magic_list():
     return [x for x in MAGIC]
@@ -278,7 +278,7 @@ Bitboard(low = 0x4000000000000000, high = 0x0000000000008000)]
 
 cdef inline Bitboard get_attack_allies(Bitboard allies, int square):
     """
-    Returns relevant supporting allies in potenital attack squares for a given square and Bitboard. Use with allied Bitboard to calculate attacked squares.
+    Returns relevant supporting allies in potential attack squares for a given square and Bitboard. Use with allied Bitboard to calculate attacked squares.
     """
     return and_board(allies, ATTACK_MASKS[square])
 
@@ -602,6 +602,40 @@ cdef Bitboard find_attacked_squares_otf(Bitboard attackers, int square): # TODO:
 
     return attacked_squares
 
+#==============================================================================
+# Defining Table Constants for dynamically initialising Tables
+#==============================================================================
+
+cdef class TableConstants:
+    cdef:
+        bb_func otf_func
+        const Bitboard* mask
+        const int* bits
+        const int* shift_bits
+        const uint64_t* magic
+        str desc
+
+    cdef init(self, bb_func otf_func, const Bitboard* mask, const int* bits, const int* shift_bits, const uint64_t* magic, str desc):
+        self.otf_func = otf_func
+        self.mask = mask
+        self.bits = bits
+        self.shift_bits = shift_bits
+        self.magic = magic
+        self.desc = desc
+
+cdef TableConstants create_table_constants(bb_func otf_func, const Bitboard* mask, const int* bits, const int* shift_bits, const uint64_t* magic, str desc):
+    cdef TableConstants constants = TableConstants.__new__(TableConstants)
+    constants.init(otf_func, mask, bits, shift_bits, magic, desc)
+    return constants
+
+cdef:
+    TableConstants MOVE_CONSTANTS = create_table_constants(find_moves_otf, &BLOCKER_MASK[0], &BLOCKER_BITS[0], &SHIFT_BITS[0], &MAGIC[0], "Building Move Tables...")
+    TableConstants ATTACK_CONSTANTS = create_table_constants(find_attacked_squares_otf, &ATTACK_MASKS[0], &ATTACK_BITS[0], &ATTACK_SHIFT_BITS[0], &ATTACK_MAGICS[0], "Building Attack Tables...")
+
+TABLE_CONSTANTS = {
+    "moves": MOVE_CONSTANTS,
+    "attacks": ATTACK_CONSTANTS
+}
 #----------------------------------------------
 # Leftover Logic for Generating Blocker Mask, Blocker Bits Constants
 #----------------------------------------------
@@ -868,7 +902,7 @@ cdef uint64_t find_magic(int square, Bitboard mask, int bits, int shift_bits, bb
         free(used)
         free_key_board_table(&table)
 
-def find_magics(squares=None, action="moves"):
+def find_magics(squares=None, magic_type="moves"):
     """
     Python-accessible function to find, print and return magic numbers for specified/all board squares.
 
@@ -880,14 +914,7 @@ def find_magics(squares=None, action="moves"):
     cdef int square, i
     cdef uint64_t magic
     cdef dict magic_dict = {}
-    cdef bb_func otf_func
-    if action == "moves":
-        otf_func = find_moves_otf
-    elif action == "attacks":
-        otf_func = find_attacked_squares_otf
-    else:
-        print("action not recognised")
-        return
+    cdef TableConstants constants = TABLE_CONSTANTS[magic_type]
 
     if squares is None:
         squares = range(81)
@@ -898,15 +925,12 @@ def find_magics(squares=None, action="moves"):
         raise ValueError("Invalid square(s). Must be: 0 <= square <= 80")
 
     for i in range(len(square_array)):
-        square = square_array[i]
-        mask = BLOCKER_MASK[square] if action == "moves" else ATTACK_MASKS[square]
-        bits = BLOCKER_BITS[square] if action == "moves" else ATTACK_BITS[square]
-        shift_bits = SHIFT_BITS[square] if action == "moves" else ATTACK_SHIFT_BITS[square]
-        magic = find_magic(square, mask, bits, shift_bits, otf_func)
+        magic = find_magic(square_array[i], constants.mask[i],
+                constants.bits[i], constants.shift_bits[i], constants.otf_func)
         if magic != 0:
-            magic_dict[square] = magic
+            magic_dict[i] = magic
         else:
-            magic_dict[square] = '***FAILED***'
+            magic_dict[i] = '***FAILED***'
 
     print("MAGICS\n-------------------------------------")
     for square in square_array:
@@ -1025,131 +1049,94 @@ def simulated_annealing(int square, uint64_t user_magic=ZERO):
     print("No Magic Found :(")
 
 #==============================================================================
-# Move Tables
+# Magic Tables
+# Structure of MagicTable:
+# MagicTable made up of 81 'squares', which are SquareTables made up of all relevant boards for the square.
 #==============================================================================
 
-cdef struct MoveTable:
-    Bitboard* moves
+cdef struct SquareTable: # stores boards per square, indexed according to magic hash
+    Bitboard* boards
     int size
 
-cdef class MoveTables:
-    cdef MoveTable[81] tables
+cdef struct MagicTable:
+    SquareTable[81] squares
 
-    def __cinit__(self):
-        cdef int i
+cdef MagicTable* create_magic_table():
+    """
+    Allocated memory for the MoveTable and all 81 constituent SquareMoveTables.
+    """
+    cdef MagicTable* table = <MagicTable*>malloc(sizeof(MagicTable))
+    if table == NULL:
+        return NULL
+
+    cdef int i
+    for i in range(81):
+        table.squares[i].boards = NULL
+        table.squares[i].size = 0
+
+    return table
+
+cdef void free_magic_table(MagicTable* table):
+    """
+    Frees memory allocated to the MagicTable, and all 81 SquareTables.
+    """
+    cdef int i
+    if table != NULL:
         for i in range(81):
-            self.tables[i].moves = NULL
-            self.tables[i].size = 0
+          if table.squares[i].boards != NULL:
+              free(table.squares[i].boards)
+        free(table)
 
-        self.build_move_tables()
+cdef void fill_square_table(str table_type, MagicTable* table, int square, KeyBoardTable* key_board_table, uint64_t shift_bits, uint64_t magic):
+    """
+    Fills the SquareTable at index 'square' in MagicTable. Creates all key / board pairs, then hashes them with our magics to find index, storing them there.
+    """
+    if table.squares[square].boards != NULL:
+        free(table.squares[square].boards)
 
-    def __dealloc__(self):
-        cdef int i
-        for i in range(81):
-            if self.tables[i].moves != NULL:
-                free(self.tables[i].moves)
+    cdef size = 1 << (64 - shift_bits)
+    table.squares[square].boards = <Bitboard*>malloc(size * sizeof(Bitboard))
+    if table.squares[square].boards == NULL:
+        raise MemoryError("Failed to allocate memory for used array (Move Tables)")
+    table.squares[square].size = size
 
-    cdef void set_table(self, int square, KeyBoardTable* blocker_moves, int size):
-        if self.tables[square].moves != NULL:
-            free(self.tables[square].moves)
+    cdef int i, index
+    for i in range(key_board_table.size):
+        index = get_hash_value(key_board_table.key[i], magic, shift_bits)
+        table.squares[square].boards[index] = key_board_table.board[i]
 
-        self.tables[square].moves = <Bitboard*>malloc(size * sizeof(Bitboard))
-        if self.tables[square].moves == NULL:
-            raise MemoryError("Failed to allocate memory for used array (Move Tables)")
-        self.tables[square].size = size
+cdef MagicTable* build_magic_table(table_type):
+    """
+    Returns ptr to a full MagicTable. Don't forget to free!
+    """
+    cdef MagicTable* table = create_magic_table()
+    if table == NULL:
+        raise MemoryError("Failed to allocate MoveTables")
+    cdef KeyBoardTable key_board_table
 
-        cdef int i
-        for i in range(blocker_moves.size):
-            index = get_hash_value(blocker_moves.key[i], MAGIC[square], SHIFT_BITS[square])
-            self.tables[square].moves[index] = blocker_moves.board[i]
+    cdef TableConstants constants = TABLE_CONSTANTS[table_type]
 
-    cdef Bitboard get_move(self, int square, Bitboard occupancy):
-        cdef uint64_t blocker_key = merge(get_blockers(occupancy, square))
-        cdef int index = get_hash_value(blocker_key, MAGIC[square], SHIFT_BITS[square])
-        return self.tables[square].moves[index]
+    cdef int i, size
+    for i in tqdm(range(81), desc=constants.desc):
+        key_board_table = build_key_board_table(i, constants.mask[i], constants.bits[i], constants.otf_func)
+        fill_square_table(table_type, table, i, &key_board_table, constants.shift_bits[i], constants.magic[i])
+        free_key_board_table(&key_board_table)
 
-    def py_get_move(self, int square, Bitboard occupancy):
-        return self.get_move(square, occupancy)
+    return table
 
-    cdef void build_move_tables(self):
-        cdef KeyBoardTable blocker_moves
-        cdef int i, size
-        for i in tqdm(range(81), desc="Building Move Tables..."):
-            blocker_moves = build_key_board_table(i, BLOCKER_MASK[i], BLOCKER_BITS[i], find_moves_otf)
-            size = 1 << (64 - SHIFT_BITS[i])
-            self.set_table(i, &blocker_moves, size)
-            free_key_board_table(&blocker_moves)
-
-        print('Move Tables Initialised.')
-
-#==============================================================================
-# Attack Tables - Pretty Much Duplicated from Above
-#==============================================================================
-
-cdef struct AttackTable:
-    Bitboard* attacks
-    int size
-
-cdef class AttackTables:
-    cdef AttackTable[81] tables
-
-    def __cinit__(self):
-        cdef int i
-        for i in range(81):
-            self.tables[i].attacks = NULL
-            self.tables[i].size = 0
-
-        self.build_attack_tables()
-
-    def __dealloc__(self):
-        cdef int i
-        for i in range(81):
-            if self.tables[i].attacks != NULL:
-                free(self.tables[i].attacks)
-
-    cdef void set_table(self, int square, KeyBoardTable* allies_attacks, int size):
-        if self.tables[square].attacks != NULL:
-            free(self.tables[square].attacks)
-
-        self.tables[square].attacks = <Bitboard*>malloc(size * sizeof(Bitboard))
-        if self.tables[square].attacks == NULL:
-            raise MemoryError("Failed to allocate memory for used array (Attack Tables)")
-        self.tables[square].size = size
-
-        cdef int i
-        for i in range(allies_attacks.size):
-            index = get_hash_value(allies_attacks.key[i], ATTACK_MAGICS[square], ATTACK_SHIFT_BITS[square])
-            self.tables[square].attacks[index] = allies_attacks.board[i]
-
-    cdef Bitboard get_attacks(self, int square, Bitboard allies):
-        cdef uint64_t ally_key = merge(get_attack_allies(allies, square))
-        cdef int index = get_hash_value(ally_key, ATTACK_MAGICS[square], ATTACK_SHIFT_BITS[square])
-        return self.tables[square].attacks[index]
-
-    def py_get_attacks(self, int square, Bitboard allies):
-        return self.get_attacks(square, allies)
-
-    cdef void build_attack_tables(self):
-        cdef KeyBoardTable allies_attacks
-        cdef int i, size
-        for i in tqdm(range(81), desc="Building Attack Tables..."):
-            allies_attacks = build_key_board_table(i, ATTACK_MASKS[i], ATTACK_BITS[i], find_attacked_squares_otf)
-            size = 1 << (64 - ATTACK_SHIFT_BITS[i])
-            self.set_table(i, &allies_attacks, size)
-            free_key_board_table(&allies_attacks)
-
-        print('Attack Tables Initialised.')
-
-def py_build_attack_tables():
-    cdef AttackTables attack_tables = AttackTables()
-    return attack_tables
+cdef search_magic_table(MagicTable* table, int square, Bitboard bb, uint64_t magic, int shift_bits):
+    """
+    for a given Magic Table, square and 'raw' key, merges the key, hashes it, then returns relevant value from Table.
+    """
+    cdef uint64_t key = merge(get_blockers(bb, square))
+    cdef int index = get_hash_value(key, magic, shift_bits)
+    return table.squares[square].boards[index]
 
 #==============================================================================
 # Game Instance - As an Object for now
 #==============================================================================
 
 cdef class GameState:
-    #cdef MoveTables move_tables = build_move_tables()
     cdef Bitboard occupancy
     cdef Bitboard attackers
     cdef Bitboard defenders
@@ -1251,13 +1238,16 @@ cdef void free_move_list(MoveList* list):
             free(list.moves)
         free(list)
 
-cdef inline Bitboard filter_king_moves(Bitboard* empty, Bitboard* raw_moves):
+cdef inline Bitboard mask_king_moves(Bitboard* empty, Bitboard* raw_moves):
     cdef Bitboard moves
     moves.low = raw_moves.low & empty.low
     moves.high = raw_moves.high & empty.high
     return moves
 
-cdef inline Bitboard filter_piece_moves(Bitboard* occupancy, Bitboard* raw_moves):
+cdef inline Bitboard mask_piece_moves(Bitboard* occupancy, Bitboard* raw_moves):
+    """
+    Takes pointers to the occupancy Bitboard, and the raw_moves Bitboard returned from the magic Table, filtering out illegal sqaures.
+    """
     cdef Bitboard moves
     moves.low = raw_moves.low & ~occupancy.low & THRONE_MASK
     moves.high = raw_moves.high & ~occupancy.high
@@ -1270,25 +1260,21 @@ cdef inline uint16_t encode_move(uint16_t from_square_shifted, uint16_t to_squar
         encoded_move = encoded_move | KING_MOVE_FLAG
     return encoded_move
 
-cdef void find_moves(MoveList* move_list, MoveTables* move_table, GameState* position):
+cdef void find_moves(MoveList* move_list, MagicTable* move_table, Bitboard allies, Bitboard blockers):
     """
     Takes pointers to MoveList, MoveTables, and GameState, modifying MoveList in place with all legal moves. Resets move list at the start.
     """
-    cdef Bitboard move_board
+    cdef Bitboard legal_moves
+    cdef int from_square
     move_list.count = 0
 
-    if position.side == 1:
-        move_board = position.all_defenders
-    else:
-        move_board = position.attackers
-
-    while move_board.low != ZERO or move_board.high != ZERO:
-        if move_board.low != ZERO:
-            from_square = pop_lsb(&move_board.low)
+    while allies.low != ZERO or allies.high != ZERO:
+        if allies.low != ZERO:
+            from_square = pop_lsb(&allies.low)
         else:
-            from_square = pop_lsb(&move_board.high) + 63
-        legal_moves = move_table.get_move(from_square, position.occupancy)
-        legal_moves = filter_piece_moves(&position.occupancy, &legal_moves)
+            from_square = pop_lsb(&allies.high) + 63
+        legal_moves = search_magic_table(move_table, from_square, blockers, MAGIC[from_square], SHIFT_BITS[from_square])
+        legal_moves = mask_piece_moves(&blockers, &legal_moves)
 
         while legal_moves.low != ZERO or legal_moves.high != ZERO:
             if legal_moves.low != ZERO:
@@ -1301,35 +1287,49 @@ cdef void find_moves(MoveList* move_list, MoveTables* move_table, GameState* pos
             move_list.moves[move_list.count] = encoded_move
             move_list.count += 1
 
+cdef void find_king_moves(MoveList* move_list, MagicTable* move_table, Bitboard king, Bitboard blockers):
+    """
+    I could include this into find_moves, and pass the masking function as an argument
+    """
+    cdef Bitboard legal_moves
+    cdef int from_square
+
+    if king.low != ZERO:
+        from_square = pop_lsb(&king.low)
+    elif king.high != ZERO:
+        from_square = pop_lsb(&king.high) + 63
+    else:
+        print("ERROR! No King on Board!")
+        return
+
+    legal_moves = search_magic_table(move_table, from_square, blockers, MAGIC[from_square], SHIFT_BITS[from_square])
+    legal_moves = mask_king_moves(&blockers, &legal_moves)
+
+    while legal_moves.low != ZERO or legal_moves.high != ZERO:
+        if legal_moves.low != ZERO:
+            to_square = pop_lsb(&legal_moves.low)
+        else:
+            to_square = pop_lsb(&legal_moves.high) + 63
+
+        encoded_move = (from_square << 7) | to_square
+
+        move_list.moves[move_list.count] = encoded_move
+        move_list.count += 1
+
 #==============================================================================
 # Tablut Engine Class - prepares gamespace
 #==============================================================================
 
-cdef void initialize_tables():
-    global global_move_tables, global_attack_tables
-    if global_move_tables is NULL:
-        global_move_tables = MoveTables()
-    if global_attack_tables is NULL:
-        global_attack_tables = AttackTables()
-
-cdef void cleanup_tables():
-    global global_move_tables, global_attack_tables
-    if global_move_tables is not NULL:
-        del global_move_tables
-        global_move_tables = NULL
-    if global_attack_tables is not NULL:
-        del global_attack_tables
-        global_attack_tables = NULL
-
 cdef class TablutEngine:
+    cdef MagicTable* move_tables
+    cdef MagicTable* attack_tables
     def __cinit__(self):
-        initialize_tables()
+        self.move_tables = build_magic_table(table_type="moves")
+        self.attack_tables = build_magic_table(table_type="attacks")
 
     def __dealloc__(self):
-        cleanup_tables()
-
-    def some_method(self):
-        some_function_using_tables()
+        free_magic_table(self.move_tables)
+        free_magic_table(self.attack_tables)
 
 #==============================================================================
 # Python Acessible Tests
@@ -1448,7 +1448,7 @@ cdef void print_binary(uint64_t n):
 
 cdef void test_lsb_methods():
     """
-    Test results show that lsb function works great - except returns 63 when shown an empty BB
+    Test results show that lsb function works great - except returns 63 when shown an empty BB (which should never happen)
     """
     cdef uint64_t[21] test_values = [
         1, 2, 4, 8, 16, 32, 64, 128,
@@ -1479,32 +1479,32 @@ def py_test_lsb_methods():
     test_lsb_methods()
 
 cdef void test_random_bitboard_lsb():
-  cdef int i, test_lsb, true_lsb
-  cdef Bitboard board
-  cdef uint64_t mask
+    cdef int i, test_lsb, true_lsb
+    cdef Bitboard board
+    cdef uint64_t mask
 
-  for i in range(1000):  # Test 1000 random boards
-      board = create_random_board()
-      test_lsb = find_lsb(board)
+    for i in range(1000):  # Test 1000 random boards
+        board = create_random_board()
+        test_lsb = find_lsb(board)
 
-      # Find true LSB for verification
-      if board.low != ZERO:
-          true_lsb = brian_kernighan_lsb(board.low)
-      elif board.high != ZERO:
-          true_lsb = brian_kernighan_lsb(board.high) + 63
-      else:
-        true_lsb = -1
+        # Find true LSB for verification
+        if board.low != ZERO:
+            true_lsb = brian_kernighan_lsb(board.low)
+        elif board.high != ZERO:
+            true_lsb = brian_kernighan_lsb(board.high) + 63
+        else:
+          true_lsb = -1
 
-      if test_lsb != true_lsb:
-          printf("Mismatch found:\n")
-          printf("Low:  ")
-          print_binary(board.low)
-          printf("High: ")
-          print_binary(board.high)
-          printf("Found LSB: %d, True LSB: %d\n", test_lsb, true_lsb)
-          return
+        if test_lsb != true_lsb:
+            printf("Mismatch found:\n")
+            printf("Low:  ")
+            print_binary(board.low)
+            printf("High: ")
+            print_binary(board.high)
+            printf("Found LSB: %d, True LSB: %d\n", test_lsb, true_lsb)
+            return
 
-  printf("All 1000 random bitboard tests passed successfully.\n")
+    printf("All 1000 random bitboard tests passed successfully.\n")
 
 def py_test_random_bitboard_lsb():
     test_random_bitboard_lsb()
@@ -1557,9 +1557,9 @@ cdef void print_move(uint16_t encoded_move):
     printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
 
 cdef main():
-    cdef MoveTables Moves = MoveTables()
-    cdef AttackTables Attacks = AttackTables()
-    cdef MoveList move_list = build_move_list()
+    cdef MagicTable* moves = build_magic_table("moves")
+    cdef MagicTable* attacks = build_magic_table("attacks")
+    cdef MoveList* move_list = build_move_list()
     cdef GameState Position = GameState()
     cdef int i = 0 # move_list counter
     cdef int from_square, to_square
@@ -1568,7 +1568,11 @@ cdef main():
     try:
         Position.print_board()
         #Position.change_turn()
-        find_moves(&move_list, &Moves, &Position)
+        if Position.side == 1:
+            find_moves(move_list, moves, Position.defenders, Position.occupancy)
+            find_king_moves(move_list, moves, Position.king, Position.occupancy)
+        else:
+            find_moves(move_list, moves, Position.attackers, Position.occupancy)
 
         printf("Generated %d moves:\n", move_list.count)
         for i in range(move_list.count):
@@ -1576,8 +1580,26 @@ cdef main():
             print_move(move_list.moves[i])
 
         printf("Total number of moves: %d\n", move_list.count)
+
+        Position.change_turn()
+        Position.print_board()
+        if Position.side == 1:
+            find_moves(move_list, moves, Position.defenders, Position.occupancy)
+            find_king_moves(move_list, moves, Position.king, Position.occupancy)
+        else:
+            find_moves(move_list, moves, Position.attackers, Position.occupancy)
+
+        printf("Generated %d moves:\n", move_list.count)
+        for i in range(move_list.count):
+            printf("Move %d: ", i+1)
+            print_move(move_list.moves[i])
+
+        printf("Total number of moves: %d\n", move_list.count)
+
     finally:
-        free_move_list(&move_list)
+        free_move_list(move_list)
+        free_magic_table(moves)
+        free_magic_table(attacks)
 
 def py_main():
     main()

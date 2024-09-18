@@ -1171,6 +1171,10 @@ cdef class GameState:
         self.throne = Bitboard(0x0000010000000000,0x0000000000000000)
         self.side = 1
 
+    cdef int check_game_over(self):  # TODO: add endgame configs. Possible to have a flag in GameState that is set on endgame conditions dynamically
+        if self.pieces[2].low != 0 or self.pieces[2].high != 0:
+            return 0
+
     cdef change_turn(self):
         self.side = self.side * -1
 
@@ -1349,6 +1353,19 @@ cdef void find_king_moves(MoveList* move_list, MagicTable* move_table, Bitboard 
         move_list.moves[move_list.count] = encoded_move
         move_list.count += 1
 
+cdef class Agent:
+    cdef public str name
+
+    def __init__(self, str name):
+        self.name = name
+
+    cdef uint16_t choose_move(self, MoveList* move_list):
+        return 0  # Placeholder
+
+cdef class RandomAgent(Agent):
+    cdef uint16_t choose_move(self, MoveList* move_list):
+        return move_list.moves[rand() % move_list.count]
+
 #==============================================================================
 # Tablut Engine Class - prepares gamespace
 #==============================================================================
@@ -1356,13 +1373,66 @@ cdef void find_king_moves(MoveList* move_list, MagicTable* move_table, Bitboard 
 cdef class TablutEngine:
     cdef MagicTable* move_tables
     cdef MagicTable* attack_tables
-    def __cinit__(self):
+    cdef MoveList* move_list
+    cdef GameState Position
+    cdef int result
+    cdef int turn_count
+    cdef Agent attacker_agent
+    cdef Agent defender_agent
+
+    def __cinit__(self, Agent attacker_agent, Agent defender_agent):
+        self.result = 0
+        self.turn_count = 0
+        self.attacker_agent = attacker_agent
+        self.defender_agent = defender_agent
+        self.initialize_game()
+
+    cdef initialize_game(self):
+        print("Intializing Tablut...")
         self.move_tables = build_magic_table(table_type="moves")
         self.attack_tables = build_magic_table(table_type="attacks")
+        self.move_list = build_move_list()
+        self.Position = GameState()
+        self.turn_count = 0
+
+    cdef play_turn(self):
+        if self.Position.side == 1:
+            find_moves(self.move_list, self.move_tables, self.Position.pieces[1],
+                      self.Position.occupancy, DEFENDER_MOVE_FLAG)
+            find_king_moves(self.move_list, self.move_tables, self.Position.pieces[2],
+                          self.Position.occupancy, KING_MOVE_FLAG)
+            move = self.attacker_agent.choose_move(self.move_list)
+            self.Position.defenders_make_move(move)
+        else:
+            find_moves(self.move_list, self.move_tables, self.Position.pieces[0],
+                      self.Position.occupancy, ATTACKER_MOVE_FLAG)
+            move = self.defender_agent.choose_move(self.move_list)
+            self.Position.attackers_make_move(move)
+        self.Position.change_turn()
+
+    cdef play_game(self):
+        while self.result == 0 and self.turn_count < 20:
+            self.play_turn()
+            self.Position.print_board()
+            self.turn_count += 1
+            self.result = self.Position.check_game_over()
+        self.print_result()
+
+    cdef print_result(self):
+        if self.result == 1:
+            print(f"Defenders Win in {self.turn_count} moves")
+        elif self.result == -1:
+            print(f"Attackers Win in {self.turn_count} moves")
+        else:
+            print(f"Draw in {self.turn_count} moves")
 
     def __dealloc__(self):
-        free_magic_table(self.move_tables)
-        free_magic_table(self.attack_tables)
+        if self.move_list is not NULL:
+            free_move_list(self.move_list)
+        if self.move_tables is not NULL:
+            free_magic_table(self.move_tables)
+        if self.attack_tables is not NULL:
+            free_magic_table(self.attack_tables)
 
 #==============================================================================
 # Python Acessible Tests
@@ -1576,7 +1646,7 @@ cdef void print_move(uint16_t encoded_move):
 
     printf("%c%d-%c%d\n", from_file, from_rank, to_file, to_rank)
 
-cdef main():
+cdef old_main():
     cdef MagicTable* moves = build_magic_table("moves")
     cdef MagicTable* attacks = build_magic_table("attacks")
     cdef MoveList* move_list = build_move_list()
@@ -1617,6 +1687,11 @@ cdef main():
         free_magic_table(moves)
         free_magic_table(attacks)
 
+cdef main():
+    cdef RandomAgent random_agent = RandomAgent("Random")
+    cdef TablutEngine engine = TablutEngine(random_agent, random_agent)
+    engine.play_game()
+
 def py_main():
     main()
 
@@ -1624,7 +1699,6 @@ def py_main():
 ##########################################################
 #                       ROADMAP                          #
 ##########################################################
-# TODO: FIX WARNINGS
 # Make Board type
 # Basic Board operations TODO: CHANGE POP/SET BIT TO USE PREMADE MASKS
 # Find Magics
